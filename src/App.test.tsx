@@ -15,11 +15,12 @@ describe("App", () => {
       screen.getByRole("img", { name: /duct network editor canvas/i })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { level: 3, name: /critical path/i })
+      screen.getByRole("heading", { level: 3, name: /system routes/i })
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { level: 3, name: /parallel branches/i })
     ).toBeInTheDocument();
+    expect(screen.getByText(/supply flow/i)).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { level: 2, name: /read-only model preview/i })
     ).toBeInTheDocument();

@@ -2,7 +2,8 @@ import {
   createAhu,
   createDuctSegment,
   createTerminalDevice,
-  type NetworkComponent
+  type NetworkComponent,
+  type TerminalDeviceComponent
 } from "../components";
 import { clonePoint3D, type Point3D } from "../core/geometry";
 import { DuctNetworkGraph } from "../core/graph";
@@ -389,11 +390,12 @@ function ensureNoEndpointComponentAtNode(
 }
 
 function finalizeDocument(document: EditorDocument): EditorDocument {
+  const synchronizedDocument = synchronizeDerivedTerminalFlows(document);
   const referencedNodeIds = new Set(
-    document.components.flatMap((component) => [...component.nodeIds])
+    synchronizedDocument.components.flatMap((component) => [...component.nodeIds])
   );
   const endpointNodeIds = new Set(
-    document.components
+    synchronizedDocument.components
       .filter(
         (component) => component.type === "ahu" || component.type === "terminal"
       )
@@ -401,13 +403,95 @@ function finalizeDocument(document: EditorDocument): EditorDocument {
   );
 
   return {
-    ...document,
-    nodes: document.nodes
+    ...synchronizedDocument,
+    nodes: synchronizedDocument.nodes
       .filter((node) => referencedNodeIds.has(node.id))
       .map((node) => ({
         ...node,
         kind: endpointNodeIds.has(node.id) ? "endpoint" : "junction"
       }))
+  };
+}
+
+function synchronizeDerivedTerminalFlows(
+  document: EditorDocument
+): EditorDocument {
+  const supplyTerminalFlowRateLps = document.components.reduce(
+    (sum, component) =>
+      component.type === "terminal" &&
+      component.metadata.terminalType === "supply"
+        ? sum + (component.flow.designFlowRateLps ?? 0)
+        : sum,
+    0
+  );
+  const exhaustTerminalFlowRateLps = document.components.reduce(
+    (sum, component) =>
+      component.type === "terminal" &&
+      component.metadata.terminalType === "exhaust"
+        ? sum + (component.flow.designFlowRateLps ?? 0)
+        : sum,
+    0
+  );
+  const outdoorTerminalCount = document.components.filter(
+    (component) =>
+      component.type === "terminal" &&
+      component.metadata.terminalType === "outdoor"
+  ).length;
+  const exhaustAirTerminalCount = document.components.filter(
+    (component) =>
+      component.type === "terminal" &&
+      component.metadata.terminalType === "exhaustAir"
+  ).length;
+  const outdoorFlowRateLps =
+    outdoorTerminalCount > 0
+      ? supplyTerminalFlowRateLps / outdoorTerminalCount
+      : 0;
+  const exhaustAirFlowRateLps =
+    exhaustAirTerminalCount > 0
+      ? exhaustTerminalFlowRateLps / exhaustAirTerminalCount
+      : 0;
+
+  return {
+    ...document,
+    components: document.components.map((component) =>
+      synchronizeTerminalFlow(
+        component,
+        outdoorFlowRateLps,
+        exhaustAirFlowRateLps
+      )
+    )
+  };
+}
+
+function synchronizeTerminalFlow(
+  component: NetworkComponent,
+  outdoorFlowRateLps: number,
+  exhaustAirFlowRateLps: number
+): NetworkComponent {
+  if (component.type !== "terminal") {
+    return component;
+  }
+
+  switch (component.metadata.terminalType) {
+    case "outdoor":
+      return updateTerminalFlow(component, outdoorFlowRateLps);
+    case "exhaustAir":
+      return updateTerminalFlow(component, exhaustAirFlowRateLps);
+    default:
+      return component;
+  }
+}
+
+function updateTerminalFlow(
+  component: TerminalDeviceComponent,
+  flowRateLps: number
+): TerminalDeviceComponent {
+  return {
+    ...component,
+    flow: {
+      designFlowRateLps: flowRateLps,
+      actualFlowRateLps: flowRateLps
+    }
   };
 }
 
@@ -439,4 +523,3 @@ function createTerminalLabel(
       return `Exhaust air terminal ${index}`;
   }
 }
-

@@ -1,8 +1,14 @@
+import type { ComponentPerformanceResult } from "../calc";
 import type { NetworkComponent } from "../components";
 import type { DuctNode } from "../core/nodes";
+import {
+  STANDARD_ROUND_DUCT_DIAMETERS_MM,
+  normalizeRoundDuctDiameterMm
+} from "../data/ductSizes";
 
 interface PropertiesProps {
   selectedComponent: NetworkComponent | null;
+  selectedComponentResult: ComponentPerformanceResult | null;
   selectedNode: DuctNode | null;
   onNodeLabelChange: (value: string) => void;
   onComponentLabelChange: (value: string) => void;
@@ -17,6 +23,7 @@ interface PropertiesProps {
 
 export function Properties({
   selectedComponent,
+  selectedComponentResult,
   selectedNode,
   onNodeLabelChange,
   onComponentLabelChange,
@@ -120,18 +127,36 @@ export function Properties({
               <option value="exhaustAir">Exhaust air</option>
             </select>
           </label>
-          <label className="property-field">
-            <span>Design flow (L/s)</span>
-            <input
-              type="number"
-              min="1"
-              step="10"
-              value={selectedComponent.flow.designFlowRateLps ?? 0}
-              onChange={(event) =>
-                onTerminalFlowRateChange(Number(event.target.value))
-              }
-            />
-          </label>
+          {selectedComponent.metadata.terminalType === "supply" ||
+          selectedComponent.metadata.terminalType === "exhaust" ? (
+            <label className="property-field">
+              <span>Design flow (L/s)</span>
+              <input
+                type="number"
+                min="1"
+                step="10"
+                value={selectedComponent.flow.designFlowRateLps ?? 0}
+                onChange={(event) =>
+                  onTerminalFlowRateChange(Number(event.target.value))
+                }
+              />
+            </label>
+          ) : (
+            <div className="property-meta">
+              <span>Auto flow</span>
+              <strong>{(selectedComponent.flow.designFlowRateLps ?? 0).toFixed(0)} L/s</strong>
+            </div>
+          )}
+          {selectedComponent.metadata.terminalType === "outdoor" ? (
+            <p className="property-help">
+              Outdoor air flow follows the sum of all supply terminals.
+            </p>
+          ) : null}
+          {selectedComponent.metadata.terminalType === "exhaustAir" ? (
+            <p className="property-help">
+              Exhaust air flow follows the sum of all exhaust terminals.
+            </p>
+          ) : null}
         </div>
       ) : null}
 
@@ -146,16 +171,19 @@ export function Properties({
             />
           </label>
           <label className="property-field">
-            <span>Diameter (mm)</span>
-            <input
-              type="number"
-              min="80"
-              step="10"
-              value={selectedComponent.geometry.diameterMm}
+            <span>Round duct size (mm)</span>
+            <select
+              value={normalizeRoundDuctDiameterMm(selectedComponent.geometry.diameterMm)}
               onChange={(event) =>
                 onDuctDiameterChange(Number(event.target.value))
               }
-            />
+            >
+              {STANDARD_ROUND_DUCT_DIAMETERS_MM.map((diameterMm) => (
+                <option key={diameterMm} value={diameterMm}>
+                  {diameterMm}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="property-field">
             <span>Local loss coefficient</span>
@@ -173,9 +201,67 @@ export function Properties({
             <span>Length</span>
             <strong>{selectedComponent.geometry.lengthMeters.toFixed(2)} m</strong>
           </div>
+          <div className="property-metric-grid">
+            <div className="property-meta">
+              <span>Flow</span>
+              <strong>{formatFlow(selectedComponentResult?.flowRateLps)}</strong>
+            </div>
+            <div className="property-meta">
+              <span>Velocity</span>
+              <strong>{formatVelocity(selectedComponentResult?.velocityMps)}</strong>
+            </div>
+            <div className="property-meta">
+              <span>R (Pa/m)</span>
+              <strong>
+                {formatPerMeterPressure(
+                  selectedComponentResult?.totalPressureLossPa,
+                  selectedComponent.geometry.lengthMeters
+                )}
+              </strong>
+            </div>
+            <div className="property-meta">
+              <span>Total pressure loss</span>
+              <strong>{formatPressure(selectedComponentResult?.totalPressureLossPa)}</strong>
+            </div>
+            <div className="property-meta">
+              <span>Friction loss</span>
+              <strong>{formatPressure(selectedComponentResult?.frictionPressureLossPa)}</strong>
+            </div>
+            <div className="property-meta">
+              <span>Local loss</span>
+              <strong>{formatPressure(selectedComponentResult?.localPressureLossPa)}</strong>
+            </div>
+          </div>
         </div>
       ) : null}
     </section>
   );
 }
 
+function formatFlow(value: number | null | undefined): string {
+  return value === null || value === undefined ? "N/A" : `${value.toFixed(0)} L/s`;
+}
+
+function formatVelocity(value: number | null | undefined): string {
+  return value === null || value === undefined ? "N/A" : `${value.toFixed(2)} m/s`;
+}
+
+function formatPressure(value: number | null | undefined): string {
+  return value === null || value === undefined ? "N/A" : `${value.toFixed(2)} Pa`;
+}
+
+function formatPerMeterPressure(
+  pressureLossPa: number | null | undefined,
+  lengthMeters: number
+): string {
+  if (
+    pressureLossPa === null ||
+    pressureLossPa === undefined ||
+    !Number.isFinite(lengthMeters) ||
+    lengthMeters <= 0
+  ) {
+    return "N/A";
+  }
+
+  return `${(pressureLossPa / lengthMeters).toFixed(2)} Pa/m`;
+}

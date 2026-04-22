@@ -1,4 +1,9 @@
-import type { RouteAnalysisResult } from "../calc";
+import type {
+  BalancingSystemResult,
+  ComponentPerformanceResult,
+  RouteAnalysisResult,
+  RouteSystemSummary
+} from "../calc";
 import type { NetworkComponent } from "../components";
 import type { DuctNode } from "../core/nodes";
 import { Properties } from "./properties";
@@ -13,6 +18,7 @@ interface SidebarProps {
   analysisError: string | null;
   selectedNode: DuctNode | null;
   selectedComponent: NetworkComponent | null;
+  selectedComponentResult: ComponentPerformanceResult | null;
   onNodeLabelChange: (value: string) => void;
   onComponentLabelChange: (value: string) => void;
   onAhuSystemTypeChange: (value: "supply" | "exhaust" | "mixed") => void;
@@ -30,6 +36,7 @@ export function Sidebar({
   analysisError,
   selectedNode,
   selectedComponent,
+  selectedComponentResult,
   onNodeLabelChange,
   onComponentLabelChange,
   onAhuSystemTypeChange,
@@ -59,14 +66,24 @@ export function Sidebar({
             <strong>{documentCounts.terminals}</strong>
           </article>
           <article>
-            <span>System flow</span>
+            <span>Supply flow</span>
             <strong>
-              {analysis ? `${analysis.networkPerformance.systemFlowRateLps} L/s` : "N/A"}
+              {analysis ? `${analysis.systems.supply.totalFlowRateLps.toFixed(0)} L/s` : "N/A"}
             </strong>
           </article>
           <article>
-            <span>Balancing groups</span>
-            <strong>{analysis ? analysis.balancing.branchGroups.length : "N/A"}</strong>
+            <span>Exhaust flow</span>
+            <strong>
+              {analysis ? `${analysis.systems.exhaust.totalFlowRateLps.toFixed(0)} L/s` : "N/A"}
+            </strong>
+          </article>
+          <article>
+            <span>Supply fan pressure</span>
+            <strong>{formatPressure(analysis?.systems.fanPressure.supplyFanPressurePa)}</strong>
+          </article>
+          <article>
+            <span>Exhaust fan pressure</span>
+            <strong>{formatPressure(analysis?.systems.fanPressure.exhaustFanPressurePa)}</strong>
           </article>
           <article>
             <span>Max imbalance</span>
@@ -91,6 +108,7 @@ export function Sidebar({
       <Properties
         selectedNode={selectedNode}
         selectedComponent={selectedComponent}
+        selectedComponentResult={selectedComponentResult}
         onNodeLabelChange={onNodeLabelChange}
         onComponentLabelChange={onComponentLabelChange}
         onAhuSystemTypeChange={onAhuSystemTypeChange}
@@ -103,50 +121,58 @@ export function Sidebar({
       <section className="sidebar-section" aria-label="Route analysis">
         <div className="sidebar-section-header">
           <p className="section-kicker">Routes</p>
-          <h3>Critical path</h3>
+          <h3>System routes</h3>
         </div>
-        {analysis?.criticalPath ? (
-          <article className="critical-card">
-            <span>{analysis.criticalPath.terminalLabel}</span>
-            <strong>{analysis.criticalPath.totalPressureLossPa.toFixed(2)} Pa</strong>
-            <p>{analysis.criticalPath.componentIds.join(" -> ")}</p>
-          </article>
+
+        {analysis ? (
+          <>
+            <div className="fan-summary-grid">
+              <article className="critical-card">
+                <span>Supply fan</span>
+                <strong>{formatPressure(analysis.systems.fanPressure.supplyFanPressurePa)}</strong>
+                <p>
+                  Outdoor air path {formatPressure(analysis.systems.outdoor.criticalPath?.totalPressureLossPa)}
+                  {" "}+ hardest supply route {formatPressure(analysis.systems.supply.criticalPath?.totalPressureLossPa)}
+                </p>
+              </article>
+              <article className="critical-card">
+                <span>Exhaust fan</span>
+                <strong>{formatPressure(analysis.systems.fanPressure.exhaustFanPressurePa)}</strong>
+                <p>
+                  Hardest exhaust route {formatPressure(analysis.systems.exhaust.criticalPath?.totalPressureLossPa)}
+                  {" "}+ exhaust air path {formatPressure(analysis.systems.exhaustAir.criticalPath?.totalPressureLossPa)}
+                </p>
+              </article>
+            </div>
+
+            <div className="route-system-list">
+              <RouteSystemSection
+                summary={analysis.systems.supply}
+                title="Supply routes"
+                emptyMessage="Add connected supply terminals to inspect the supply-side critical path."
+              />
+              <RouteSystemSection
+                summary={analysis.systems.exhaust}
+                title="Exhaust routes"
+                emptyMessage="Add connected exhaust terminals to inspect the exhaust-side critical path."
+              />
+              <RouteSystemSection
+                summary={analysis.systems.outdoor}
+                title="Outdoor air path"
+                emptyMessage="Outdoor air intake paths appear here when an outdoor terminal is connected."
+              />
+              <RouteSystemSection
+                summary={analysis.systems.exhaustAir}
+                title="Exhaust air path"
+                emptyMessage="Exhaust air discharge paths appear here when an exhaust air terminal is connected."
+              />
+            </div>
+          </>
         ) : (
           <p className="sidebar-empty">
             Connected terminal routes appear here once the network is analyzable.
           </p>
         )}
-
-        <div className="route-list">
-          {analysis?.routes.map((route) => (
-            <article
-              key={route.terminalId}
-              className={
-                analysis.criticalPath?.terminalId === route.terminalId
-                  ? "route-card is-critical"
-                  : "route-card"
-              }
-            >
-              <header>
-                <div>
-                  <strong>{route.terminalLabel}</strong>
-                  <span>{route.nodePath.length - 1} segments</span>
-                </div>
-                <strong>{route.totalPressureLossPa.toFixed(2)} Pa</strong>
-              </header>
-              {analysis.criticalPath?.terminalId !== route.terminalId ? (
-                <span>
-                  {(analysis.criticalPath!.totalPressureLossPa - route.totalPressureLossPa).toFixed(2)}
-                  {" "}
-                  Pa below critical
-                </span>
-              ) : (
-                <span>Reference route for the highest required pressure</span>
-              )}
-              <p>{route.componentIds.join(" -> ")}</p>
-            </article>
-          ))}
-        </div>
       </section>
 
       <section className="sidebar-section" aria-label="Balancing analysis">
@@ -155,85 +181,18 @@ export function Sidebar({
           <h3>Parallel branches</h3>
         </div>
         {analysis ? (
-          <>
-            <article
-              className={
-                analysis.balancing.requiresBalancing
-                  ? "balance-summary balance-summary-warning"
-                  : "balance-summary balance-summary-ok"
-              }
-            >
-              <span>
-                {analysis.balancing.requiresBalancing
-                  ? "Balancing suggested"
-                  : "Branches within tolerance"}
-              </span>
-              <strong>
-                {analysis.balancing.maxPressureDifferencePa.toFixed(2)} Pa
-              </strong>
-              <p>
-                {analysis.balancing.requiresBalancing
-                  ? "Lighter branches can be trimmed toward the highest-loss reference branch."
-                  : "Current parallel routes are close enough that no added balancing loss is suggested."}
-              </p>
-            </article>
-
-            {analysis.balancing.branchGroups.length > 0 ? (
-              <div className="balance-group-list">
-                {analysis.balancing.branchGroups.map((group) => (
-                  <article
-                    key={group.nodeId}
-                    className={
-                      group.requiresBalancing
-                        ? "balance-group balance-group-warning"
-                        : "balance-group"
-                    }
-                  >
-                    <header>
-                      <div>
-                        <strong>{group.nodeLabel}</strong>
-                        <span>
-                          {group.branchCount} branches, {group.terminalCount} terminals
-                        </span>
-                      </div>
-                      <strong>{group.imbalancePa.toFixed(2)} Pa</strong>
-                    </header>
-                    <p>
-                      Tolerance {group.tolerancePa.toFixed(2)} Pa, reference{" "}
-                      {group.referencePressureLossPa.toFixed(2)} Pa
-                    </p>
-                    <div className="balance-branch-list">
-                      {group.branches.map((branch) => (
-                        <div key={branch.branchNodeId} className="balance-branch">
-                          <div>
-                            <strong>{branch.branchLabel}</strong>
-                            <span>
-                              {branch.representativeTerminalLabel}
-                              {branch.terminalIds.length > 1
-                                ? ` (${branch.terminalIds.length} terminals)`
-                                : ""}
-                            </span>
-                          </div>
-                          <div className="balance-branch-metrics">
-                            <strong>{branch.downstreamPressureLossPa.toFixed(2)} Pa</strong>
-                            <span>
-                              {branch.suggestedAdditionalLossPa > 0
-                                ? `Add ${branch.suggestedAdditionalLossPa.toFixed(2)} Pa`
-                                : "Reference"}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <p className="sidebar-empty">
-                Balancing groups appear when two or more terminal routes split in parallel.
-              </p>
-            )}
-          </>
+          <div className="balancing-system-list">
+            <BalancingSystemSection
+              title="Supply balancing"
+              result={analysis.balancing.supply}
+              emptyMessage="Supply branch comparisons appear when two or more supply routes split in parallel."
+            />
+            <BalancingSystemSection
+              title="Exhaust balancing"
+              result={analysis.balancing.exhaust}
+              emptyMessage="Exhaust branch comparisons appear when two or more exhaust routes split in parallel."
+            />
+          </div>
         ) : (
           <p className="sidebar-empty">
             Balancing checks become available after route analysis is unlocked.
@@ -242,4 +201,178 @@ export function Sidebar({
       </section>
     </aside>
   );
+}
+
+interface RouteSystemSectionProps {
+  summary: RouteSystemSummary;
+  title: string;
+  emptyMessage: string;
+}
+
+function RouteSystemSection({
+  summary,
+  title,
+  emptyMessage
+}: RouteSystemSectionProps) {
+  return (
+    <section className="route-system-section">
+      <div className="route-system-header">
+        <strong>{title}</strong>
+        <span>
+          {summary.routes.length} routes, {summary.totalFlowRateLps.toFixed(0)} L/s
+        </span>
+      </div>
+
+      {summary.routes.length > 0 ? (
+        <div className="route-list">
+          {summary.routes.map((route) => (
+            <article
+              key={route.terminalId}
+              className={
+                summary.criticalPath?.terminalId === route.terminalId
+                  ? "route-card is-critical"
+                  : "route-card"
+              }
+            >
+              <header>
+                <strong>{route.terminalLabel}</strong>
+                <strong>{route.totalPressureLossPa.toFixed(2)} Pa</strong>
+              </header>
+              <div className="route-meta-row">
+                <span className="route-type-chip">{describeTerminalType(route.terminalType)}</span>
+                <span>{route.nodePath.length - 1} duct segments</span>
+                <span>{route.designFlowRateLps.toFixed(0)} L/s</span>
+              </div>
+              {summary.criticalPath?.terminalId !== route.terminalId ? (
+                <span>
+                  {(summary.criticalPath!.totalPressureLossPa - route.totalPressureLossPa).toFixed(2)}
+                  {" "}
+                  Pa below system critical
+                </span>
+              ) : (
+                <span>Reference route for this system</span>
+              )}
+              <p>{route.componentIds.join(" -> ")}</p>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p className="sidebar-empty">{emptyMessage}</p>
+      )}
+    </section>
+  );
+}
+
+interface BalancingSystemSectionProps {
+  title: string;
+  result: BalancingSystemResult;
+  emptyMessage: string;
+}
+
+function BalancingSystemSection({
+  title,
+  result,
+  emptyMessage
+}: BalancingSystemSectionProps) {
+  return (
+    <section className="balancing-system-section">
+      <div className="route-system-header">
+        <strong>{title}</strong>
+        <span>{result.branchGroups.length} groups</span>
+      </div>
+
+      <article
+        className={
+          result.requiresBalancing
+            ? "balance-summary balance-summary-warning"
+            : "balance-summary balance-summary-ok"
+        }
+      >
+        <span>
+          {result.requiresBalancing
+            ? "Balancing suggested"
+            : "Branches within tolerance"}
+        </span>
+        <strong>{result.maxPressureDifferencePa.toFixed(2)} Pa</strong>
+        <p>
+          {result.requiresBalancing
+            ? "Lighter parallel branches can be trimmed toward the highest-loss reference branch."
+            : "Current parallel routes are close enough that no balancing loss is suggested."}
+        </p>
+      </article>
+
+      {result.branchGroups.length > 0 ? (
+        <div className="balance-group-list">
+          {result.branchGroups.map((group) => (
+            <article
+              key={group.nodeId}
+              className={
+                group.requiresBalancing
+                  ? "balance-group balance-group-warning"
+                  : "balance-group"
+              }
+            >
+              <header>
+                <div>
+                  <strong>{group.nodeLabel}</strong>
+                  <span>
+                    {group.branchCount} branches, {group.terminalCount} terminals
+                  </span>
+                </div>
+                <strong>{group.imbalancePa.toFixed(2)} Pa</strong>
+              </header>
+              <p>
+                Tolerance {group.tolerancePa.toFixed(2)} Pa, reference{" "}
+                {group.referencePressureLossPa.toFixed(2)} Pa
+              </p>
+              <div className="balance-branch-list">
+                {group.branches.map((branch) => (
+                  <div key={branch.branchNodeId} className="balance-branch">
+                    <div>
+                      <strong>{branch.branchLabel}</strong>
+                      <span>
+                        {branch.representativeTerminalLabel}
+                        {branch.terminalIds.length > 1
+                          ? ` (${branch.terminalIds.length} terminals)`
+                          : ""}
+                      </span>
+                    </div>
+                    <div className="balance-branch-metrics">
+                      <strong>{branch.downstreamPressureLossPa.toFixed(2)} Pa</strong>
+                      <span>
+                        {branch.suggestedAdditionalLossPa > 0
+                          ? `Add ${branch.suggestedAdditionalLossPa.toFixed(2)} Pa`
+                          : "Reference"}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p className="sidebar-empty">{emptyMessage}</p>
+      )}
+    </section>
+  );
+}
+
+function describeTerminalType(
+  terminalType: RouteSystemSummary["terminalType"]
+): string {
+  switch (terminalType) {
+    case "supply":
+      return "Supply";
+    case "exhaust":
+      return "Exhaust";
+    case "outdoor":
+      return "Outdoor air";
+    case "exhaustAir":
+      return "Exhaust air";
+  }
+}
+
+function formatPressure(value: number | null | undefined): string {
+  return value === null || value === undefined ? "N/A" : `${value.toFixed(2)} Pa`;
 }

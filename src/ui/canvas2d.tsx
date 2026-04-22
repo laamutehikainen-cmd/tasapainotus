@@ -9,10 +9,12 @@ import type {
   ToolMode
 } from "./editorState";
 
-const CANVAS_SCALE_PX_PER_METER = 92;
-const CANVAS_WIDTH_METERS = 12;
-const CANVAS_HEIGHT_METERS = 7.4;
-const CANVAS_PADDING_PX = 46;
+const CANVAS_SCALE_PX_PER_METER = 12;
+const CANVAS_WIDTH_METERS = 120;
+const CANVAS_HEIGHT_METERS = 74;
+const CANVAS_PADDING_PX = 44;
+const DISPLAY_GRID_STEP_METERS = 1;
+const DISPLAY_GRID_MAJOR_STEP_METERS = 5;
 const VIEW_BOX_WIDTH =
   CANVAS_WIDTH_METERS * CANVAS_SCALE_PX_PER_METER + CANVAS_PADDING_PX * 2;
 const VIEW_BOX_HEIGHT =
@@ -39,21 +41,15 @@ export function Canvas2D({
   onCanvasPoint,
   onSelectionChange
 }: Canvas2DProps) {
-  function handlePointerMove(
-    event: React.PointerEvent<SVGSVGElement>
-  ): void {
-    const nextPoint = getCanvasPointFromEvent(event);
-
-    onHoverPointChange(nextPoint);
+  function handlePointerMove(event: React.PointerEvent<SVGSVGElement>): void {
+    onHoverPointChange(getCanvasPointFromEvent(event));
   }
 
   function handlePointerLeave(): void {
     onHoverPointChange(null);
   }
 
-  function handleCanvasClick(
-    event: React.PointerEvent<SVGSVGElement>
-  ): void {
+  function handleCanvasClick(event: React.PointerEvent<SVGSVGElement>): void {
     onCanvasPoint(getCanvasPointFromEvent(event));
   }
 
@@ -82,7 +78,8 @@ export function Canvas2D({
         </div>
         <div className="editor-stage-status">
           <span>Tool: {describeTool(activeTool)}</span>
-          <span>Grid: {Math.round(GRID_STEP_METERS * 100)} cm</span>
+          <span>Grid snap: {Math.round(GRID_STEP_METERS * 100)} cm</span>
+          <span>Canvas: {CANVAS_WIDTH_METERS} x {CANVAS_HEIGHT_METERS} m</span>
         </div>
       </div>
 
@@ -105,10 +102,13 @@ export function Canvas2D({
 
         <g className="canvas-grid">
           {Array.from({
-            length: Math.floor(CANVAS_WIDTH_METERS / GRID_STEP_METERS) + 1
+            length: Math.floor(CANVAS_WIDTH_METERS / DISPLAY_GRID_STEP_METERS) + 1
           }).map((_, index) => {
-            const x = CANVAS_PADDING_PX + index * GRID_STEP_METERS * CANVAS_SCALE_PX_PER_METER;
-            const isMajor = index % 10 === 0;
+            const x =
+              CANVAS_PADDING_PX +
+              index * DISPLAY_GRID_STEP_METERS * CANVAS_SCALE_PX_PER_METER;
+            const meters = index * DISPLAY_GRID_STEP_METERS;
+            const isMajor = meters % DISPLAY_GRID_MAJOR_STEP_METERS === 0;
 
             return (
               <line
@@ -122,10 +122,13 @@ export function Canvas2D({
             );
           })}
           {Array.from({
-            length: Math.floor(CANVAS_HEIGHT_METERS / GRID_STEP_METERS) + 1
+            length: Math.floor(CANVAS_HEIGHT_METERS / DISPLAY_GRID_STEP_METERS) + 1
           }).map((_, index) => {
-            const y = CANVAS_PADDING_PX + index * GRID_STEP_METERS * CANVAS_SCALE_PX_PER_METER;
-            const isMajor = index % 10 === 0;
+            const y =
+              CANVAS_PADDING_PX +
+              index * DISPLAY_GRID_STEP_METERS * CANVAS_SCALE_PX_PER_METER;
+            const meters = index * DISPLAY_GRID_STEP_METERS;
+            const isMajor = meters % DISPLAY_GRID_MAJOR_STEP_METERS === 0;
 
             return (
               <line
@@ -166,8 +169,8 @@ export function Canvas2D({
                     className={isSelected ? "duct-line is-selected" : "duct-line"}
                     style={{
                       strokeWidth: Math.max(
-                        12,
-                        component.geometry.diameterMm / 16
+                        4,
+                        component.geometry.diameterMm / 70
                       )
                     }}
                   />
@@ -187,7 +190,7 @@ export function Canvas2D({
                   />
                   <text
                     x={(start.x + end.x) / 2}
-                    y={(start.y + end.y) / 2 - 12}
+                    y={(start.y + end.y) / 2 - 14}
                     className="duct-label"
                   >
                     {component.metadata.label ?? component.id}
@@ -222,20 +225,8 @@ export function Canvas2D({
                     });
                   }}
                 >
-                  {component.type === "ahu" ? (
-                    <rect
-                      x={point.x - 30}
-                      y={point.y - 24}
-                      width="60"
-                      height="48"
-                      rx="14"
-                    />
-                  ) : (
-                    <path
-                      d={createTerminalPath(point.x, point.y, component.metadata.terminalType)}
-                    />
-                  )}
-                  <text x={point.x} y={point.y + 40} className="endpoint-label">
+                  {renderEndpointSymbol(component, point)}
+                  <text x={point.x} y={point.y + 34} className="endpoint-label">
                     {component.metadata.label}
                   </text>
                 </g>
@@ -254,7 +245,7 @@ export function Canvas2D({
                 <circle
                   cx={point.x}
                   cy={point.y}
-                  r={isSelected ? 8 : 6}
+                  r={isSelected ? 7 : 5}
                   className={isSelected ? "node-dot is-selected" : "node-dot"}
                   onPointerDown={(event) => {
                     handleAnchoredPointerDown(event, node.position, {
@@ -264,7 +255,7 @@ export function Canvas2D({
                   }}
                 />
                 {isSelected ? (
-                  <text x={point.x + 12} y={point.y - 12} className="node-label">
+                  <text x={point.x + 16} y={point.y - 14} className="node-label">
                     {node.metadata.label ?? node.id}
                   </text>
                 ) : null}
@@ -302,6 +293,83 @@ export function Canvas2D({
       </svg>
     </section>
   );
+}
+
+function renderEndpointSymbol(
+  component: Extract<NetworkComponent, { type: "ahu" | "terminal" }>,
+  point: { x: number; y: number }
+) {
+  if (component.type === "ahu") {
+    return (
+      <>
+        <rect
+          className="endpoint-ahu-shell"
+          x={point.x - 22}
+          y={point.y - 18}
+          width="44"
+          height="36"
+          rx="8"
+        />
+        <rect
+          className="endpoint-ahu-port"
+          x={point.x + 18}
+          y={point.y - 6}
+          width="12"
+          height="12"
+          rx="3"
+        />
+      </>
+    );
+  }
+
+  switch (component.metadata.terminalType) {
+    case "supply":
+      return (
+        <>
+          <circle className="endpoint-terminal-ring" cx={point.x} cy={point.y} r="15" />
+          <circle className="endpoint-terminal-core" cx={point.x} cy={point.y} r="7" />
+          <line className="endpoint-terminal-detail" x1={point.x - 10} y1={point.y} x2={point.x + 10} y2={point.y} />
+          <line className="endpoint-terminal-detail" x1={point.x} y1={point.y - 10} x2={point.x} y2={point.y + 10} />
+        </>
+      );
+    case "exhaust":
+      return (
+        <>
+          <rect
+            className="endpoint-terminal-ring"
+            x={point.x - 14}
+            y={point.y - 14}
+            width="28"
+            height="28"
+            rx="6"
+          />
+          <rect
+            className="endpoint-terminal-core"
+            x={point.x - 6}
+            y={point.y - 6}
+            width="12"
+            height="12"
+            rx="3"
+          />
+        </>
+      );
+    case "outdoor":
+      return (
+        <>
+          <circle className="endpoint-air-ring" cx={point.x} cy={point.y} r="15" />
+          <line className="endpoint-air-arrow" x1={point.x - 24} y1={point.y} x2={point.x + 6} y2={point.y} />
+          <path className="endpoint-air-arrow" d={`M ${point.x + 6} ${point.y} L ${point.x - 2} ${point.y - 6} L ${point.x - 2} ${point.y + 6} Z`} />
+        </>
+      );
+    case "exhaustAir":
+      return (
+        <>
+          <circle className="endpoint-air-ring" cx={point.x} cy={point.y} r="15" />
+          <line className="endpoint-air-arrow" x1={point.x - 6} y1={point.y} x2={point.x + 24} y2={point.y} />
+          <path className="endpoint-air-arrow" d={`M ${point.x + 24} ${point.y} L ${point.x + 16} ${point.y - 6} L ${point.x + 16} ${point.y + 6} Z`} />
+        </>
+      );
+  }
 }
 
 function getCanvasPointFromEvent(
@@ -361,23 +429,6 @@ function describeTool(tool: ToolMode): string {
       return "Place outdoor terminal";
     case "exhaustAirTerminal":
       return "Place exhaust air terminal";
-  }
-}
-
-function createTerminalPath(
-  centerX: number,
-  centerY: number,
-  terminalType: "supply" | "exhaust" | "outdoor" | "exhaustAir"
-): string {
-  switch (terminalType) {
-    case "supply":
-      return `M ${centerX} ${centerY - 24} L ${centerX + 22} ${centerY + 18} L ${centerX - 22} ${centerY + 18} Z`;
-    case "exhaust":
-      return `M ${centerX - 24} ${centerY - 20} L ${centerX + 24} ${centerY - 20} L ${centerX} ${centerY + 24} Z`;
-    case "outdoor":
-      return `M ${centerX} ${centerY - 26} L ${centerX + 20} ${centerY} L ${centerX} ${centerY + 26} L ${centerX - 20} ${centerY} Z`;
-    case "exhaustAir":
-      return `M ${centerX - 24} ${centerY} A 24 24 0 1 0 ${centerX + 24} ${centerY} A 24 24 0 1 0 ${centerX - 24} ${centerY}`;
   }
 }
 

@@ -38,12 +38,15 @@ export {
   type BalancingAnalysisResult,
   type BalancingBranchGroup,
   type BalancingBranchResult,
+  type BalancingSystemResult,
   type BalancingOptions
 } from "./balancing";
 export {
   analyzeDuctRoutes,
   type RouteAnalysisResult,
   type RouteComponentBreakdownItem,
+  type RouteSystemSummary,
+  type RouteSystemsSummary,
   type TerminalRouteResult
 } from "./routes";
 export {

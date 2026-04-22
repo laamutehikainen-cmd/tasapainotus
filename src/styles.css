@@ -37,7 +37,7 @@ body {
 }
 
 .app-shell {
-  width: min(1480px, calc(100% - 1.5rem));
+  width: min(1820px, calc(100% - 1.25rem));
   margin: 0 auto;
   padding: 2rem 0 3rem;
 }
@@ -194,7 +194,7 @@ body {
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(310px, 0.9fr);
+  grid-template-columns: minmax(0, 2.15fr) minmax(360px, 0.95fr);
   gap: 1rem;
   margin-top: 1rem;
 }
@@ -236,7 +236,7 @@ body {
   margin-top: 1rem;
   display: block;
   border-radius: 22px;
-  min-height: 560px;
+  min-height: 760px;
   overflow: hidden;
 }
 
@@ -301,16 +301,16 @@ body {
 }
 
 .grid-line {
-  stroke: rgba(21, 53, 69, 0.07);
+  stroke: rgba(21, 53, 69, 0.05);
   stroke-width: 1;
 }
 
 .grid-line.is-major {
-  stroke: rgba(21, 53, 69, 0.16);
+  stroke: rgba(21, 53, 69, 0.12);
 }
 
 .duct-line {
-  stroke: rgba(44, 129, 156, 0.78);
+  stroke: rgba(35, 112, 138, 0.88);
   stroke-linecap: round;
 }
 
@@ -320,7 +320,7 @@ body {
 
 .duct-hit-area {
   stroke: transparent;
-  stroke-width: 28;
+  stroke-width: 22;
   cursor: pointer;
 }
 
@@ -328,7 +328,7 @@ body {
 .endpoint-label,
 .node-label {
   fill: var(--bg-deep);
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 600;
   text-anchor: middle;
   paint-order: stroke;
@@ -338,12 +338,7 @@ body {
 }
 
 .endpoint-marker {
-  fill: rgba(19, 76, 94, 0.92);
   cursor: pointer;
-}
-
-.endpoint-marker.is-selected {
-  fill: rgba(229, 103, 58, 0.96);
 }
 
 .node-dot {
@@ -359,7 +354,7 @@ body {
 
 .draft-line {
   stroke: rgba(229, 103, 58, 0.9);
-  stroke-width: 8;
+  stroke-width: 5;
   stroke-linecap: round;
   stroke-dasharray: 18 10;
 }
@@ -451,6 +446,18 @@ body {
   gap: 0.2rem;
 }
 
+.property-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.property-help {
+  margin: -0.1rem 0 0;
+  color: #46697a;
+  font-size: 0.9rem;
+}
+
 .critical-card {
   padding: 1rem;
   display: grid;
@@ -480,7 +487,6 @@ body {
 .route-list {
   display: grid;
   gap: 0.8rem;
-  margin-top: 0.85rem;
 }
 
 .route-card {
@@ -492,6 +498,47 @@ body {
 .route-card.is-critical {
   border-color: rgba(229, 103, 58, 0.38);
   box-shadow: inset 0 0 0 1px rgba(229, 103, 58, 0.1);
+}
+
+.route-meta-row,
+.route-system-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.route-system-list,
+.balancing-system-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.route-system-section,
+.balancing-system-section {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.route-meta-row {
+  color: #46697a;
+  font-size: 0.9rem;
+}
+
+.route-type-chip {
+  padding: 0.28rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(212, 238, 243, 0.9);
+  color: #245365;
+  font-weight: 600;
+}
+
+.fan-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-bottom: 0.85rem;
 }
 
 .balance-summary,
@@ -545,6 +592,64 @@ body {
   gap: 0.2rem;
 }
 
+.endpoint-ahu-shell {
+  fill: rgba(19, 76, 94, 0.96);
+  stroke: rgba(255, 255, 255, 0.86);
+  stroke-width: 2;
+}
+
+.endpoint-ahu-port {
+  fill: rgba(98, 179, 202, 0.96);
+}
+
+.endpoint-terminal-ring {
+  fill: rgba(255, 255, 255, 0.92);
+  stroke: rgba(19, 76, 94, 0.96);
+  stroke-width: 2.5;
+}
+
+.endpoint-terminal-core {
+  fill: rgba(19, 76, 94, 0.92);
+}
+
+.endpoint-terminal-detail {
+  stroke: rgba(19, 76, 94, 0.92);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.endpoint-air-ring {
+  fill: rgba(233, 247, 250, 0.92);
+  stroke: rgba(19, 76, 94, 0.9);
+  stroke-width: 2.5;
+}
+
+.endpoint-air-arrow {
+  fill: rgba(229, 103, 58, 0.96);
+  stroke: rgba(229, 103, 58, 0.96);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.endpoint-marker.is-selected .endpoint-ahu-shell,
+.endpoint-marker.is-selected .endpoint-terminal-ring,
+.endpoint-marker.is-selected .endpoint-air-ring {
+  stroke: rgba(229, 103, 58, 0.96);
+}
+
+.endpoint-marker.is-selected .endpoint-terminal-core,
+.endpoint-marker.is-selected .endpoint-terminal-detail,
+.endpoint-marker.is-selected .endpoint-ahu-port {
+  fill: rgba(229, 103, 58, 0.96);
+  stroke: rgba(229, 103, 58, 0.96);
+}
+
+.endpoint-marker.is-selected .endpoint-air-arrow {
+  fill: rgba(182, 77, 37, 0.98);
+  stroke: rgba(182, 77, 37, 0.98);
+}
+
 .workflow-strip {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -581,6 +686,11 @@ body {
   .hero-editor,
   .workspace,
   .workflow-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .fan-summary-grid,
+  .property-metric-grid {
     grid-template-columns: 1fr;
   }
 }

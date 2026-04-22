@@ -1,5 +1,6 @@
 import { DuctNetworkGraph } from "../core/graph";
 import type { NodeId } from "../core/nodes";
+import type { TerminalDeviceType } from "../components";
 
 export interface BalanceableRouteComponent {
   pressureLossPa: number;
@@ -8,6 +9,7 @@ export interface BalanceableRouteComponent {
 export interface BalanceableRoute {
   terminalId: string;
   terminalLabel: string;
+  terminalType: TerminalDeviceType;
   nodePath: NodeId[];
   totalPressureLossPa: number;
   componentBreakdown: BalanceableRouteComponent[];
@@ -41,8 +43,16 @@ export interface BalancingBranchGroup {
   branches: BalancingBranchResult[];
 }
 
-export interface BalancingAnalysisResult {
+export interface BalancingSystemResult {
+  terminalType: "supply" | "exhaust";
   branchGroups: BalancingBranchGroup[];
+  requiresBalancing: boolean;
+  maxPressureDifferencePa: number;
+}
+
+export interface BalancingAnalysisResult {
+  supply: BalancingSystemResult;
+  exhaust: BalancingSystemResult;
   requiresBalancing: boolean;
   maxPressureDifferencePa: number;
 }
@@ -60,6 +70,26 @@ export function analyzeRouteBalancing(
   routes: BalanceableRoute[],
   options: BalancingOptions = {}
 ): BalancingAnalysisResult {
+  const supply = analyzeBalancingSystem(graph, routes, "supply", options);
+  const exhaust = analyzeBalancingSystem(graph, routes, "exhaust", options);
+
+  return {
+    supply,
+    exhaust,
+    requiresBalancing: supply.requiresBalancing || exhaust.requiresBalancing,
+    maxPressureDifferencePa: Math.max(
+      supply.maxPressureDifferencePa,
+      exhaust.maxPressureDifferencePa
+    )
+  };
+}
+
+function analyzeBalancingSystem(
+  graph: DuctNetworkGraph,
+  routes: BalanceableRoute[],
+  terminalType: "supply" | "exhaust",
+  options: BalancingOptions
+): BalancingSystemResult {
   const absoluteTolerancePa =
     options.balancingAbsoluteTolerancePa ??
     DEFAULT_BALANCING_ABSOLUTE_TOLERANCE_PA;
@@ -71,7 +101,7 @@ export function analyzeRouteBalancing(
     Map<string, BranchContribution[]>
   >();
 
-  for (const route of routes) {
+  for (const route of routes.filter((candidate) => candidate.terminalType === terminalType)) {
     for (let nodeIndex = 0; nodeIndex < route.nodePath.length - 1; nodeIndex += 1) {
       const nodeId = route.nodePath[nodeIndex];
       const branchNodeId = route.nodePath[nodeIndex + 1];
@@ -102,6 +132,7 @@ export function analyzeRouteBalancing(
     .sort((left, right) => right.imbalancePa - left.imbalancePa);
 
   return {
+    terminalType,
     branchGroups,
     requiresBalancing: branchGroups.some((group) => group.requiresBalancing),
     maxPressureDifferencePa: branchGroups.reduce(

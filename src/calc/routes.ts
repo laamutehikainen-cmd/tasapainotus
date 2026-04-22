@@ -1,4 +1,8 @@
-import type { NetworkComponent, TerminalDeviceComponent } from "../components";
+import type {
+  NetworkComponent,
+  TerminalDeviceComponent,
+  TerminalDeviceType
+} from "../components";
 import { DuctNetworkGraph, type TerminalPath } from "../core/graph";
 import {
   analyzeDuctNetworkPerformance,
@@ -23,16 +27,39 @@ export interface RouteComponentBreakdownItem {
 export interface TerminalRouteResult {
   terminalId: string;
   terminalLabel: string;
+  terminalType: TerminalDeviceType;
+  designFlowRateLps: number;
   nodePath: string[];
   componentIds: string[];
   componentBreakdown: RouteComponentBreakdownItem[];
   totalPressureLossPa: number;
 }
 
+export interface RouteSystemSummary {
+  terminalType: TerminalDeviceType;
+  routes: TerminalRouteResult[];
+  criticalPath: TerminalRouteResult | null;
+  totalFlowRateLps: number;
+}
+
+export interface FanPressureSummary {
+  supplyFanPressurePa: number | null;
+  exhaustFanPressurePa: number | null;
+}
+
+export interface RouteSystemsSummary {
+  supply: RouteSystemSummary;
+  exhaust: RouteSystemSummary;
+  outdoor: RouteSystemSummary;
+  exhaustAir: RouteSystemSummary;
+  fanPressure: FanPressureSummary;
+}
+
 export interface RouteAnalysisResult {
   networkPerformance: NetworkPerformanceAnalysis;
   routes: TerminalRouteResult[];
   criticalPath: TerminalRouteResult | null;
+  systems: RouteSystemsSummary;
   balancing: BalancingAnalysisResult;
 }
 
@@ -60,21 +87,14 @@ export function analyzeDuctRoutes(
       networkPerformance
     )
   );
-  const criticalPath =
-    routes.reduce<TerminalRouteResult | null>((currentWorst, candidate) => {
-      if (!currentWorst) {
-        return candidate;
-      }
-
-      return candidate.totalPressureLossPa > currentWorst.totalPressureLossPa
-        ? candidate
-        : currentWorst;
-    }, null) ?? null;
+  const criticalPath = findCriticalPath(routes);
+  const systems = createRouteSystemsSummary(routes);
 
   return {
     networkPerformance,
     routes,
     criticalPath,
+    systems,
     balancing: analyzeRouteBalancing(graph, routes, options)
   };
 }
@@ -111,6 +131,8 @@ function createTerminalRouteResult(
   return {
     terminalId: terminal.id,
     terminalLabel: terminal.metadata.label,
+    terminalType: terminal.metadata.terminalType,
+    designFlowRateLps: terminal.flow.designFlowRateLps ?? 0,
     nodePath: terminalPath.nodePath,
     componentIds,
     componentBreakdown,
@@ -119,6 +141,79 @@ function createTerminalRouteResult(
       0
     )
   };
+}
+
+function createRouteSystemsSummary(routes: TerminalRouteResult[]): RouteSystemsSummary {
+  const supply = createRouteSystemSummary("supply", routes);
+  const exhaust = createRouteSystemSummary("exhaust", routes);
+  const outdoor = createRouteSystemSummary("outdoor", routes);
+  const exhaustAir = createRouteSystemSummary("exhaustAir", routes);
+
+  return {
+    supply,
+    exhaust,
+    outdoor,
+    exhaustAir,
+    fanPressure: {
+      supplyFanPressurePa: sumRoutePressureLossPa(
+        supply.criticalPath,
+        outdoor.criticalPath
+      ),
+      exhaustFanPressurePa: sumRoutePressureLossPa(
+        exhaust.criticalPath,
+        exhaustAir.criticalPath
+      )
+    }
+  };
+}
+
+function createRouteSystemSummary(
+  terminalType: TerminalDeviceType,
+  routes: TerminalRouteResult[]
+): RouteSystemSummary {
+  const filteredRoutes = routes.filter((route) => route.terminalType === terminalType);
+
+  return {
+    terminalType,
+    routes: filteredRoutes,
+    criticalPath: findCriticalPath(filteredRoutes),
+    totalFlowRateLps: filteredRoutes.reduce(
+      (sum, route) => sum + route.designFlowRateLps,
+      0
+    )
+  };
+}
+
+function findCriticalPath(
+  routes: TerminalRouteResult[]
+): TerminalRouteResult | null {
+  return (
+    routes.reduce<TerminalRouteResult | null>((currentWorst, candidate) => {
+      if (!currentWorst) {
+        return candidate;
+      }
+
+      return candidate.totalPressureLossPa > currentWorst.totalPressureLossPa
+        ? candidate
+        : currentWorst;
+    }, null) ?? null
+  );
+}
+
+function sumRoutePressureLossPa(
+  primaryRoute: TerminalRouteResult | null,
+  secondaryRoute: TerminalRouteResult | null
+): number | null {
+  if (!primaryRoute && !secondaryRoute) {
+    return null;
+  }
+
+  return Number(
+    (
+      (primaryRoute?.totalPressureLossPa ?? 0) +
+      (secondaryRoute?.totalPressureLossPa ?? 0)
+    ).toFixed(6)
+  );
 }
 
 function deriveInlineComponentIdsForPath(

@@ -5,7 +5,8 @@ import {
   completeDuctDraft,
   createInitialEditorDocument,
   deleteSelection,
-  placeComponentAtPoint
+  placeComponentAtPoint,
+  updateComponentInDocument
 } from "./editorState";
 
 describe("editorState", () => {
@@ -40,5 +41,50 @@ describe("editorState", () => {
 
     expect(document.components).toHaveLength(0);
     expect(document.nodes).toHaveLength(0);
+  });
+
+  it("syncs outdoor and exhaust air terminal flows from editable terminal totals", () => {
+    let document = createInitialEditorDocument();
+
+    document = placeComponentAtPoint(document, "ahu", { x: 5, y: 5, z: 0 }).document;
+    document = placeComponentAtPoint(document, "supplyTerminal", { x: 8, y: 5, z: 0 }).document;
+    document = placeComponentAtPoint(document, "exhaustTerminal", { x: 8, y: 7, z: 0 }).document;
+    document = placeComponentAtPoint(document, "outdoorTerminal", { x: 2, y: 5, z: 0 }).document;
+    document = placeComponentAtPoint(document, "exhaustAirTerminal", { x: 2, y: 7, z: 0 }).document;
+
+    document = updateComponentInDocument(document, "terminal-4", (component) =>
+      component.type === "terminal"
+        ? {
+            ...component,
+            flow: {
+              designFlowRateLps: 260,
+              actualFlowRateLps: 260
+            }
+          }
+        : component
+    );
+    document = updateComponentInDocument(document, "terminal-6", (component) =>
+      component.type === "terminal"
+        ? {
+            ...component,
+            flow: {
+              designFlowRateLps: 180,
+              actualFlowRateLps: 180
+            }
+          }
+        : component
+    );
+
+    const outdoorTerminal = document.components.find(
+      (component) => component.id === "terminal-8"
+    );
+    const exhaustAirTerminal = document.components.find(
+      (component) => component.id === "terminal-10"
+    );
+
+    expect(outdoorTerminal?.type).toBe("terminal");
+    expect(exhaustAirTerminal?.type).toBe("terminal");
+    expect(outdoorTerminal?.flow.designFlowRateLps).toBe(260);
+    expect(exhaustAirTerminal?.flow.designFlowRateLps).toBe(180);
   });
 });

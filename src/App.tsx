@@ -1,7 +1,13 @@
 import { startTransition, useDeferredValue, useEffect, useState } from "react";
-import { analyzeDuctRoutes, type RouteAnalysisResult } from "./calc";
+import {
+  analyzeDuctRoutes,
+  getComponentPerformanceResult,
+  type ComponentPerformanceResult,
+  type RouteAnalysisResult
+} from "./calc";
 import { type NetworkComponent } from "./components";
 import { type DuctNode } from "./core/nodes";
+import { normalizeRoundDuctDiameterMm } from "./data/ductSizes";
 import { Canvas2D } from "./ui/canvas2d";
 import { Controls } from "./ui/controls";
 import {
@@ -60,6 +66,18 @@ function App() {
     selection?.kind === "component"
       ? findComponentById(document, selection.id)
       : null;
+  let selectedComponentResult: ComponentPerformanceResult | null = null;
+
+  if (selectedComponent && routeAnalysis) {
+    try {
+      selectedComponentResult = getComponentPerformanceResult(
+        routeAnalysis.networkPerformance,
+        selectedComponent.id
+      );
+    } catch {
+      selectedComponentResult = null;
+    }
+  }
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent): void {
@@ -290,7 +308,7 @@ function App() {
               ...component,
               geometry: {
                 ...component.geometry,
-                diameterMm: value
+                diameterMm: normalizeRoundDuctDiameterMm(value)
               }
             }
           : component
@@ -392,6 +410,7 @@ function App() {
           onAhuSystemTypeChange={handleAhuSystemTypeChange}
           onTerminalFlowRateChange={handleTerminalFlowRateChange}
           onTerminalTypeChange={handleTerminalTypeChange}
+          selectedComponentResult={selectedComponentResult}
           onDuctDiameterChange={handleDuctDiameterChange}
           onDuctLocalLossChange={handleDuctLocalLossChange}
         />
