@@ -32,6 +32,20 @@ describe("buildView3DSceneData", () => {
       maxY: 3
     });
     expect(sceneData.ducts[0]?.isCritical).toBe(true);
+    expect(sceneData.endpoints).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "ahu-2",
+          connectionDirection: { x: 1, y: 0, z: 0 },
+          connectedDuctDiameterMeters: 0.25
+        }),
+        expect.objectContaining({
+          id: "terminal-4",
+          connectionDirection: { x: -1, y: 0, z: 0 },
+          connectedDuctDiameterMeters: 0.25
+        })
+      ])
+    );
   });
 
   it("keeps non-critical endpoints unhighlighted", () => {
