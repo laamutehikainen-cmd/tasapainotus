@@ -238,6 +238,11 @@ body {
   border-radius: 22px;
   min-height: 760px;
   overflow: hidden;
+  cursor: grab;
+}
+
+.editor-canvas.is-panning {
+  cursor: grabbing;
 }
 
 .viewer-shell {

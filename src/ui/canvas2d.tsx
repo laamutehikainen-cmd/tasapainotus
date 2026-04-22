@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { NetworkComponent } from "../components";
 import type { Point3D } from "../core/geometry";
 import type { DuctNode } from "../core/nodes";
@@ -20,6 +20,26 @@ const BASE_VIEWPORT_WIDTH_METERS = 12;
 const BASE_VIEWPORT_HEIGHT_METERS = 7.4;
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 4;
+const PAN_THRESHOLD_PX = 4;
+const TOTAL_CANVAS_WIDTH_PX =
+  CANVAS_WIDTH_METERS * CANVAS_SCALE_PX_PER_METER + CANVAS_PADDING_PX * 2;
+const TOTAL_CANVAS_HEIGHT_PX =
+  CANVAS_HEIGHT_METERS * CANVAS_SCALE_PX_PER_METER + CANVAS_PADDING_PX * 2;
+
+interface PanSession {
+  pointerId: number;
+  startClientX: number;
+  startClientY: number;
+  startSvgPoint: {
+    x: number;
+    y: number;
+  };
+  startViewportOrigin: {
+    x: number;
+    y: number;
+  };
+  didPan: boolean;
+}
 
 interface Canvas2DProps {
   document: EditorDocument;
@@ -43,6 +63,9 @@ export function Canvas2D({
   onSelectionChange
 }: Canvas2DProps) {
   const [zoom, setZoom] = useState(1);
+  const [viewportOrigin, setViewportOrigin] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const panSessionRef = useRef<PanSession | null>(null);
   const viewBoxWidth =
     BASE_VIEWPORT_WIDTH_METERS * (1 / zoom) * CANVAS_SCALE_PX_PER_METER +
     CANVAS_PADDING_PX * 2;
@@ -51,28 +74,137 @@ export function Canvas2D({
     CANVAS_PADDING_PX * 2;
 
   function handlePointerMove(event: React.PointerEvent<SVGSVGElement>): void {
+    const panSession = panSessionRef.current;
+
+    if (
+      panSession !== null &&
+      panSession.pointerId === event.pointerId
+    ) {
+      const deltaClientX = event.clientX - panSession.startClientX;
+      const deltaClientY = event.clientY - panSession.startClientY;
+
+      if (
+        !panSession.didPan &&
+        (Math.abs(deltaClientX) >= PAN_THRESHOLD_PX ||
+          Math.abs(deltaClientY) >= PAN_THRESHOLD_PX)
+      ) {
+        panSession.didPan = true;
+        setIsPanning(true);
+        onHoverPointChange(null);
+      }
+
+      if (panSession.didPan) {
+        const currentSvgPoint = getSvgPointFromEvent(event);
+
+        setViewportOrigin(
+          clampViewportOrigin(
+            {
+              x:
+                panSession.startViewportOrigin.x -
+                (currentSvgPoint.x - panSession.startSvgPoint.x),
+              y:
+                panSession.startViewportOrigin.y -
+                (currentSvgPoint.y - panSession.startSvgPoint.y)
+            },
+            viewBoxWidth,
+            viewBoxHeight
+          )
+        );
+
+        return;
+      }
+    }
+
     onHoverPointChange(getCanvasPointFromEvent(event));
   }
 
   function handlePointerLeave(): void {
+    if (panSessionRef.current?.didPan) {
+      return;
+    }
+
     onHoverPointChange(null);
   }
 
-  function handleCanvasClick(event: React.PointerEvent<SVGSVGElement>): void {
+  function handleCanvasPointerDown(
+    event: React.PointerEvent<SVGSVGElement>
+  ): void {
+    if (event.button !== 0) {
+      return;
+    }
+
+    panSessionRef.current = {
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startSvgPoint: getSvgPointFromEvent(event),
+      startViewportOrigin: viewportOrigin,
+      didPan: false
+    };
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function handleCanvasPointerUp(
+    event: React.PointerEvent<SVGSVGElement>
+  ): void {
+    const panSession = panSessionRef.current;
+
+    if (
+      event.button !== 0 ||
+      panSession === null ||
+      panSession.pointerId !== event.pointerId
+    ) {
+      return;
+    }
+
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    panSessionRef.current = null;
+
+    if (panSession.didPan) {
+      setIsPanning(false);
+      onHoverPointChange(null);
+
+      return;
+    }
+
     onCanvasPoint(getCanvasPointFromEvent(event));
+  }
+
+  function handleCanvasPointerCancel(
+    event: React.PointerEvent<SVGSVGElement>
+  ): void {
+    if (panSessionRef.current?.pointerId !== event.pointerId) {
+      return;
+    }
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    panSessionRef.current = null;
+    setIsPanning(false);
+    onHoverPointChange(null);
   }
 
   function handleWheel(event: React.WheelEvent<SVGSVGElement>): void {
     event.preventDefault();
 
-    setZoom((currentZoom) =>
-      clamp(
-        Number(
-          (currentZoom * (event.deltaY < 0 ? 1.12 : 1 / 1.12)).toFixed(4)
-        ),
-        MIN_ZOOM,
-        MAX_ZOOM
-      )
+    const nextZoom = clamp(
+      Number((zoom * (event.deltaY < 0 ? 1.12 : 1 / 1.12)).toFixed(4)),
+      MIN_ZOOM,
+      MAX_ZOOM
+    );
+    const nextViewBoxWidth =
+      BASE_VIEWPORT_WIDTH_METERS * (1 / nextZoom) * CANVAS_SCALE_PX_PER_METER +
+      CANVAS_PADDING_PX * 2;
+    const nextViewBoxHeight =
+      BASE_VIEWPORT_HEIGHT_METERS * (1 / nextZoom) * CANVAS_SCALE_PX_PER_METER +
+      CANVAS_PADDING_PX * 2;
+
+    setZoom(nextZoom);
+    setViewportOrigin((currentOrigin) =>
+      clampViewportOrigin(currentOrigin, nextViewBoxWidth, nextViewBoxHeight)
     );
   }
 
@@ -105,17 +237,21 @@ export function Canvas2D({
           <span>Canvas: {CANVAS_WIDTH_METERS} x {CANVAS_HEIGHT_METERS} m</span>
           <span>Zoom: {Math.round(zoom * 100)}%</span>
           <span>Wheel: zoom</span>
+          <span>Drag background: pan</span>
         </div>
       </div>
 
       <svg
-        className="editor-canvas"
+        className={isPanning ? "editor-canvas is-panning" : "editor-canvas"}
         role="img"
         aria-label="Duct network editor canvas"
-        viewBox={`0 0 ${viewBoxWidth} ${viewBoxHeight}`}
+        viewBox={`${viewportOrigin.x} ${viewportOrigin.y} ${viewBoxWidth} ${viewBoxHeight}`}
+        preserveAspectRatio="xMinYMin meet"
         onPointerMove={handlePointerMove}
         onPointerLeave={handlePointerLeave}
-        onPointerDown={handleCanvasClick}
+        onPointerDown={handleCanvasPointerDown}
+        onPointerUp={handleCanvasPointerUp}
+        onPointerCancel={handleCanvasPointerCancel}
         onWheel={handleWheel}
       >
         <rect
@@ -417,15 +553,9 @@ function renderEndpointSymbol(
 function getCanvasPointFromEvent(
   event: React.PointerEvent<SVGSVGElement>
 ): Point3D {
-  const svg = event.currentTarget;
-  const rect = svg.getBoundingClientRect();
-  const relativeX = event.clientX - rect.left;
-  const relativeY = event.clientY - rect.top;
-  const viewBox = svg.viewBox.baseVal;
-  const scaleX = viewBox.width / rect.width;
-  const scaleY = viewBox.height / rect.height;
-  const svgX = viewBox.x + relativeX * scaleX;
-  const svgY = viewBox.y + relativeY * scaleY;
+  const svgPoint = getSvgPointFromEvent(event);
+  const svgX = svgPoint.x;
+  const svgY = svgPoint.y;
 
   const xMeters = clamp(
     (svgX - CANVAS_PADDING_PX) / CANVAS_SCALE_PX_PER_METER,
@@ -442,6 +572,28 @@ function getCanvasPointFromEvent(
     x: Math.round(xMeters / GRID_STEP_METERS) * GRID_STEP_METERS,
     y: Math.round(yMeters / GRID_STEP_METERS) * GRID_STEP_METERS,
     z: 0
+  };
+}
+
+function getSvgPointFromEvent(
+  event: React.PointerEvent<SVGSVGElement>
+): { x: number; y: number } {
+  const svg = event.currentTarget;
+  const screenPoint = new DOMPoint(event.clientX, event.clientY);
+  const screenToSvgMatrix = svg.getScreenCTM()?.inverse();
+
+  if (!screenToSvgMatrix) {
+    return {
+      x: 0,
+      y: 0
+    };
+  }
+
+  const svgPoint = screenPoint.matrixTransform(screenToSvgMatrix);
+
+  return {
+    x: svgPoint.x,
+    y: svgPoint.y
   };
 }
 
@@ -477,4 +629,15 @@ function describeTool(tool: ToolMode): string {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+function clampViewportOrigin(
+  origin: { x: number; y: number },
+  viewBoxWidth: number,
+  viewBoxHeight: number
+): { x: number; y: number } {
+  return {
+    x: clamp(origin.x, 0, Math.max(0, TOTAL_CANVAS_WIDTH_PX - viewBoxWidth)),
+    y: clamp(origin.y, 0, Math.max(0, TOTAL_CANVAS_HEIGHT_PX - viewBoxHeight))
+  };
 }
