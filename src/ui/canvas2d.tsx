@@ -57,6 +57,22 @@ export function Canvas2D({
     onCanvasPoint(getCanvasPointFromEvent(event));
   }
 
+  function handleAnchoredPointerDown(
+    event: React.PointerEvent<SVGGElement | SVGCircleElement>,
+    point: Point3D,
+    nextSelection: EditorSelection
+  ): void {
+    event.stopPropagation();
+
+    if (activeTool === "select") {
+      onSelectionChange(nextSelection);
+
+      return;
+    }
+
+    onCanvasPoint(point);
+  }
+
   return (
     <section className="editor-stage" aria-label="2D editor">
       <div className="editor-stage-header">
@@ -200,8 +216,7 @@ export function Canvas2D({
                   key={component.id}
                   className={isSelected ? "endpoint-marker is-selected" : "endpoint-marker"}
                   onPointerDown={(event) => {
-                    event.stopPropagation();
-                    onSelectionChange({
+                    handleAnchoredPointerDown(event, node.position, {
                       kind: "component",
                       id: component.id
                     });
@@ -242,8 +257,7 @@ export function Canvas2D({
                   r={isSelected ? 8 : 6}
                   className={isSelected ? "node-dot is-selected" : "node-dot"}
                   onPointerDown={(event) => {
-                    event.stopPropagation();
-                    onSelectionChange({
+                    handleAnchoredPointerDown(event, node.position, {
                       kind: "node",
                       id: node.id
                     });
@@ -370,4 +384,3 @@ function createTerminalPath(
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
-
