@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { NetworkComponent } from "../components";
 import type { Point3D } from "../core/geometry";
 import type { DuctNode } from "../core/nodes";
@@ -9,16 +10,16 @@ import type {
   ToolMode
 } from "./editorState";
 
-const CANVAS_SCALE_PX_PER_METER = 12;
+const CANVAS_SCALE_PX_PER_METER = 92;
 const CANVAS_WIDTH_METERS = 120;
 const CANVAS_HEIGHT_METERS = 74;
 const CANVAS_PADDING_PX = 44;
-const DISPLAY_GRID_STEP_METERS = 1;
-const DISPLAY_GRID_MAJOR_STEP_METERS = 5;
-const VIEW_BOX_WIDTH =
-  CANVAS_WIDTH_METERS * CANVAS_SCALE_PX_PER_METER + CANVAS_PADDING_PX * 2;
-const VIEW_BOX_HEIGHT =
-  CANVAS_HEIGHT_METERS * CANVAS_SCALE_PX_PER_METER + CANVAS_PADDING_PX * 2;
+const DISPLAY_GRID_STEP_METERS = GRID_STEP_METERS;
+const DISPLAY_GRID_MAJOR_STEP_METERS = 1;
+const BASE_VIEWPORT_WIDTH_METERS = 12;
+const BASE_VIEWPORT_HEIGHT_METERS = 7.4;
+const MIN_ZOOM = 0.1;
+const MAX_ZOOM = 4;
 
 interface Canvas2DProps {
   document: EditorDocument;
@@ -41,6 +42,14 @@ export function Canvas2D({
   onCanvasPoint,
   onSelectionChange
 }: Canvas2DProps) {
+  const [zoom, setZoom] = useState(1);
+  const viewBoxWidth =
+    BASE_VIEWPORT_WIDTH_METERS * (1 / zoom) * CANVAS_SCALE_PX_PER_METER +
+    CANVAS_PADDING_PX * 2;
+  const viewBoxHeight =
+    BASE_VIEWPORT_HEIGHT_METERS * (1 / zoom) * CANVAS_SCALE_PX_PER_METER +
+    CANVAS_PADDING_PX * 2;
+
   function handlePointerMove(event: React.PointerEvent<SVGSVGElement>): void {
     onHoverPointChange(getCanvasPointFromEvent(event));
   }
@@ -51,6 +60,20 @@ export function Canvas2D({
 
   function handleCanvasClick(event: React.PointerEvent<SVGSVGElement>): void {
     onCanvasPoint(getCanvasPointFromEvent(event));
+  }
+
+  function handleWheel(event: React.WheelEvent<SVGSVGElement>): void {
+    event.preventDefault();
+
+    setZoom((currentZoom) =>
+      clamp(
+        Number(
+          (currentZoom * (event.deltaY < 0 ? 1.12 : 1 / 1.12)).toFixed(4)
+        ),
+        MIN_ZOOM,
+        MAX_ZOOM
+      )
+    );
   }
 
   function handleAnchoredPointerDown(
@@ -80,6 +103,8 @@ export function Canvas2D({
           <span>Tool: {describeTool(activeTool)}</span>
           <span>Grid snap: {Math.round(GRID_STEP_METERS * 100)} cm</span>
           <span>Canvas: {CANVAS_WIDTH_METERS} x {CANVAS_HEIGHT_METERS} m</span>
+          <span>Zoom: {Math.round(zoom * 100)}%</span>
+          <span>Wheel: zoom</span>
         </div>
       </div>
 
@@ -87,16 +112,21 @@ export function Canvas2D({
         className="editor-canvas"
         role="img"
         aria-label="Duct network editor canvas"
-        viewBox={`0 0 ${VIEW_BOX_WIDTH} ${VIEW_BOX_HEIGHT}`}
+        viewBox={`0 0 ${viewBoxWidth} ${viewBoxHeight}`}
         onPointerMove={handlePointerMove}
         onPointerLeave={handlePointerLeave}
         onPointerDown={handleCanvasClick}
+        onWheel={handleWheel}
       >
         <rect
           x="0"
           y="0"
-          width={VIEW_BOX_WIDTH}
-          height={VIEW_BOX_HEIGHT}
+          width={
+            CANVAS_WIDTH_METERS * CANVAS_SCALE_PX_PER_METER + CANVAS_PADDING_PX * 2
+          }
+          height={
+            CANVAS_HEIGHT_METERS * CANVAS_SCALE_PX_PER_METER + CANVAS_PADDING_PX * 2
+          }
           className="canvas-surface"
         />
 
@@ -116,7 +146,10 @@ export function Canvas2D({
                 x1={x}
                 y1={CANVAS_PADDING_PX}
                 x2={x}
-                y2={VIEW_BOX_HEIGHT - CANVAS_PADDING_PX}
+                y2={
+                  CANVAS_HEIGHT_METERS * CANVAS_SCALE_PX_PER_METER +
+                  CANVAS_PADDING_PX
+                }
                 className={isMajor ? "grid-line is-major" : "grid-line"}
               />
             );
@@ -135,7 +168,10 @@ export function Canvas2D({
                 key={`grid-y-${index}`}
                 x1={CANVAS_PADDING_PX}
                 y1={y}
-                x2={VIEW_BOX_WIDTH - CANVAS_PADDING_PX}
+                x2={
+                  CANVAS_WIDTH_METERS * CANVAS_SCALE_PX_PER_METER +
+                  CANVAS_PADDING_PX
+                }
                 y2={y}
                 className={isMajor ? "grid-line is-major" : "grid-line"}
               />
@@ -280,12 +316,18 @@ export function Canvas2D({
               x1={toCanvasPoint(hoverPoint).x}
               y1={CANVAS_PADDING_PX}
               x2={toCanvasPoint(hoverPoint).x}
-              y2={VIEW_BOX_HEIGHT - CANVAS_PADDING_PX}
+              y2={
+                CANVAS_HEIGHT_METERS * CANVAS_SCALE_PX_PER_METER +
+                CANVAS_PADDING_PX
+              }
             />
             <line
               x1={CANVAS_PADDING_PX}
               y1={toCanvasPoint(hoverPoint).y}
-              x2={VIEW_BOX_WIDTH - CANVAS_PADDING_PX}
+              x2={
+                CANVAS_WIDTH_METERS * CANVAS_SCALE_PX_PER_METER +
+                CANVAS_PADDING_PX
+              }
               y2={toCanvasPoint(hoverPoint).y}
             />
           </g>
@@ -379,10 +421,11 @@ function getCanvasPointFromEvent(
   const rect = svg.getBoundingClientRect();
   const relativeX = event.clientX - rect.left;
   const relativeY = event.clientY - rect.top;
-  const scaleX = VIEW_BOX_WIDTH / rect.width;
-  const scaleY = VIEW_BOX_HEIGHT / rect.height;
-  const svgX = relativeX * scaleX;
-  const svgY = relativeY * scaleY;
+  const viewBox = svg.viewBox.baseVal;
+  const scaleX = viewBox.width / rect.width;
+  const scaleY = viewBox.height / rect.height;
+  const svgX = viewBox.x + relativeX * scaleX;
+  const svgY = viewBox.y + relativeY * scaleY;
 
   const xMeters = clamp(
     (svgX - CANVAS_PADDING_PX) / CANVAS_SCALE_PX_PER_METER,
