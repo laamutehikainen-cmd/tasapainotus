@@ -1,4 +1,6 @@
 import { analyzeDuctRoutes } from "../calc";
+import { deriveDuctAirSystemLookup } from "../ductAirSystems";
+import { DEFAULT_AHU_PORT_OFFSET_METERS, getAhuPortAnchors } from "../components";
 import {
   beginDuctDraft,
   buildGraphFromEditorDocument,
@@ -15,12 +17,45 @@ describe("buildView3DSceneData", () => {
     document = placeComponentAtPoint(document, "ahu", { x: 1, y: 2, z: 0 }).document;
     document = placeComponentAtPoint(document, "supplyTerminal", { x: 4, y: 2, z: 0 }).document;
 
-    const draft = beginDuctDraft(document, { x: 1, y: 2, z: 0 });
+    const ahu = document.components.find(
+      (component) => component.type === "ahu"
+    );
+    const ahuNode = document.nodes.find((node) => node.id === ahu?.nodeIds[0]);
+
+    expect(ahu?.type).toBe("ahu");
+    expect(ahuNode).toBeDefined();
+
+    const supplyPort = getAhuPortAnchors(
+      ahu!,
+      ahuNode!.position,
+      DEFAULT_AHU_PORT_OFFSET_METERS
+    ).find(
+      (port) => port.portType === "supply"
+    );
+
+    expect(supplyPort).toBeDefined();
+
+    const draft = beginDuctDraft(
+      document,
+      { x: 1, y: 2, z: 0 },
+      {
+        renderPosition: supplyPort!.position,
+        ahuConnection: {
+          componentId: ahu!.id,
+          nodeId: ahuNode!.id,
+          portType: "supply"
+        }
+      }
+    );
     document = completeDuctDraft(document, draft, { x: 4, y: 2, z: 0 }).document;
 
     const graph = buildGraphFromEditorDocument(document);
     const analysis = analyzeDuctRoutes(graph);
-    const sceneData = buildView3DSceneData(document, analysis);
+    const sceneData = buildView3DSceneData(
+      document,
+      analysis,
+      deriveDuctAirSystemLookup(document, analysis)
+    );
     const ahuEndpoint = sceneData.endpoints.find((item) => item.id === "ahu-2");
 
     expect(sceneData.ducts).toHaveLength(1);
@@ -30,12 +65,12 @@ describe("buildView3DSceneData", () => {
         id: "ahu-2",
         geometry: expect.objectContaining({
           type: "ahu",
-          ports: [
+          ports: expect.arrayContaining([
             expect.objectContaining({
               airSystem: "supply",
               connectedDuctId: "duct-5"
             })
-          ]
+          ])
         })
       })
     );
@@ -71,7 +106,11 @@ describe("buildView3DSceneData", () => {
 
     const graph = buildGraphFromEditorDocument(document);
     const analysis = analyzeDuctRoutes(graph);
-    const sceneData = buildView3DSceneData(document, analysis);
+    const sceneData = buildView3DSceneData(
+      document,
+      analysis,
+      deriveDuctAirSystemLookup(document, analysis)
+    );
     const criticalTerminal = sceneData.endpoints.find(
       (item) => item.type === "terminal" && item.isCritical
     );
@@ -92,18 +131,64 @@ describe("buildView3DSceneData", () => {
     document = placeComponentAtPoint(document, "outdoorTerminal", { x: 1, y: 4, z: 0 }).document;
     document = placeComponentAtPoint(document, "exhaustAirTerminal", { x: 4, y: 7, z: 0 }).document;
 
-    let draft = beginDuctDraft(document, { x: 4, y: 4, z: 0 });
+    const ahu = document.components.find((component) => component.type === "ahu");
+    const ahuNode = document.nodes.find((node) => node.id === ahu?.nodeIds[0]);
+
+    expect(ahu?.type).toBe("ahu");
+    expect(ahuNode).toBeDefined();
+
+    const ports = new Map(
+      getAhuPortAnchors(
+        ahu!,
+        ahuNode!.position,
+        DEFAULT_AHU_PORT_OFFSET_METERS
+      ).map((port) => [port.portType, port])
+    );
+
+    let draft = beginDuctDraft(document, { x: 4, y: 4, z: 0 }, {
+      renderPosition: ports.get("supply")!.position,
+      ahuConnection: {
+        componentId: ahu!.id,
+        nodeId: ahuNode!.id,
+        portType: "supply"
+      }
+    });
     document = completeDuctDraft(document, draft, { x: 8, y: 4, z: 0 }).document;
-    draft = beginDuctDraft(document, { x: 4, y: 4, z: 0 });
+    draft = beginDuctDraft(document, { x: 4, y: 4, z: 0 }, {
+      renderPosition: ports.get("extract")!.position,
+      ahuConnection: {
+        componentId: ahu!.id,
+        nodeId: ahuNode!.id,
+        portType: "extract"
+      }
+    });
     document = completeDuctDraft(document, draft, { x: 4, y: 1, z: 0 }).document;
-    draft = beginDuctDraft(document, { x: 4, y: 4, z: 0 });
+    draft = beginDuctDraft(document, { x: 4, y: 4, z: 0 }, {
+      renderPosition: ports.get("outdoor")!.position,
+      ahuConnection: {
+        componentId: ahu!.id,
+        nodeId: ahuNode!.id,
+        portType: "outdoor"
+      }
+    });
     document = completeDuctDraft(document, draft, { x: 1, y: 4, z: 0 }).document;
-    draft = beginDuctDraft(document, { x: 4, y: 4, z: 0 });
+    draft = beginDuctDraft(document, { x: 4, y: 4, z: 0 }, {
+      renderPosition: ports.get("exhaust")!.position,
+      ahuConnection: {
+        componentId: ahu!.id,
+        nodeId: ahuNode!.id,
+        portType: "exhaust"
+      }
+    });
     document = completeDuctDraft(document, draft, { x: 4, y: 7, z: 0 }).document;
 
     const graph = buildGraphFromEditorDocument(document);
     const analysis = analyzeDuctRoutes(graph);
-    const sceneData = buildView3DSceneData(document, analysis);
+    const sceneData = buildView3DSceneData(
+      document,
+      analysis,
+      deriveDuctAirSystemLookup(document, analysis)
+    );
     const ahuEndpoint = sceneData.endpoints.find(
       (item) => item.id === "ahu-2" && item.geometry.type === "ahu"
     );

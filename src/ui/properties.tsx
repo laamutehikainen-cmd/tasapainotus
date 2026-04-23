@@ -2,6 +2,7 @@ import type {
   AutomaticFittingResult,
   ComponentPerformanceResult
 } from "../calc";
+import { getAirSystemLabel } from "../airSystems";
 import type { NetworkComponent } from "../components";
 import type { DuctNode } from "../core/nodes";
 import {
@@ -17,10 +18,13 @@ interface PropertiesProps {
   onNodeLabelChange: (value: string) => void;
   onComponentLabelChange: (value: string) => void;
   onAhuSystemTypeChange: (value: "supply" | "exhaust" | "mixed") => void;
+  onAhuRotationChange: (value: number) => void;
+  selectedAhuConnectedDuctCount: number;
   onAhuDimensionChange: (
     dimension: "widthMeters" | "depthMeters" | "heightMeters",
     value: number
   ) => void;
+  selectedDuctAirSystemLabel: string | null;
   onTerminalFlowRateChange: (value: number) => void;
   onTerminalTypeChange: (
     value: "supply" | "exhaust" | "outdoor" | "exhaustAir"
@@ -42,7 +46,10 @@ export function Properties({
   onNodeLabelChange,
   onComponentLabelChange,
   onAhuSystemTypeChange,
+  onAhuRotationChange,
+  selectedAhuConnectedDuctCount,
   onAhuDimensionChange,
+  selectedDuctAirSystemLabel,
   onTerminalFlowRateChange,
   onTerminalTypeChange,
   onDuctDiameterChange,
@@ -169,6 +176,53 @@ export function Properties({
               <option value="mixed">Mixed</option>
             </select>
           </label>
+          <div className="property-meta">
+            <span>Rotation</span>
+            <strong>{selectedComponent.metadata.rotationDegrees} deg</strong>
+          </div>
+          <div className="tool-panel-actions">
+            <button
+              className="ghost-button"
+              type="button"
+              disabled={selectedAhuConnectedDuctCount > 0}
+              onClick={() =>
+                onAhuRotationChange(selectedComponent.metadata.rotationDegrees - 90)
+              }
+            >
+              Rotate -90
+            </button>
+            <button
+              className="ghost-button"
+              type="button"
+              disabled={selectedAhuConnectedDuctCount > 0}
+              onClick={() =>
+                onAhuRotationChange(selectedComponent.metadata.rotationDegrees + 90)
+              }
+            >
+              Rotate +90
+            </button>
+          </div>
+          <label className="property-field">
+            <span>Rotation (deg)</span>
+            <input
+              type="number"
+              step="90"
+              value={selectedComponent.metadata.rotationDegrees}
+              disabled={selectedAhuConnectedDuctCount > 0}
+              onChange={(event) =>
+                onAhuRotationChange(Number(event.target.value))
+              }
+            />
+          </label>
+          {selectedAhuConnectedDuctCount > 0 ? (
+            <p className="property-help">
+              Rotation is locked after ducts are connected to the AHU ports.
+            </p>
+          ) : (
+            <p className="property-help">
+              Rotate the AHU before connecting ducts so the fixed ports face the right directions.
+            </p>
+          )}
           <div className="property-metric-grid">
             <label className="property-field">
               <span>Length (m)</span>
@@ -323,6 +377,16 @@ export function Properties({
             <span>Length</span>
             <strong>{selectedComponent.geometry.lengthMeters.toFixed(2)} m</strong>
           </div>
+          <div className="property-meta">
+            <span>Air system</span>
+            <strong>{selectedDuctAirSystemLabel ?? "Unassigned"}</strong>
+          </div>
+          {selectedComponent.metadata.ahuConnection ? (
+            <div className="property-meta">
+              <span>AHU port</span>
+              <strong>{getAirSystemLabel(selectedComponent.metadata.ahuConnection.portType)}</strong>
+            </div>
+          ) : null}
           <div className="property-metric-grid">
             <div className="property-meta">
               <span>Flow</span>

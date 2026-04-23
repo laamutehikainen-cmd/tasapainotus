@@ -1,7 +1,16 @@
-export { createAhu, type AhuComponent, type CreateAhuInput } from "./ahu";
+export {
+  createAhu,
+  DEFAULT_AHU_PORT_OFFSET_METERS,
+  getAhuPortAnchors,
+  normalizeAhuRotationDegrees,
+  type AhuComponent,
+  type AhuPortAnchor,
+  type CreateAhuInput
+} from "./ahu";
 export {
   createDuctSegment,
   type CreateDuctSegmentInput,
+  type DuctAhuConnection,
   type DuctSegmentComponent
 } from "./duct";
 export {

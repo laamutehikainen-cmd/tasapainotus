@@ -21,9 +21,12 @@ interface SidebarProps {
   selectedNodeFittings: AutomaticFittingResult[];
   selectedComponent: NetworkComponent | null;
   selectedComponentResult: ComponentPerformanceResult | null;
+  selectedDuctAirSystemLabel: string | null;
   onNodeLabelChange: (value: string) => void;
   onComponentLabelChange: (value: string) => void;
   onAhuSystemTypeChange: (value: "supply" | "exhaust" | "mixed") => void;
+  onAhuRotationChange: (value: number) => void;
+  selectedAhuConnectedDuctCount: number;
   onAhuDimensionChange: (
     dimension: "widthMeters" | "depthMeters" | "heightMeters",
     value: number
@@ -49,9 +52,12 @@ export function Sidebar({
   selectedNodeFittings,
   selectedComponent,
   selectedComponentResult,
+  selectedDuctAirSystemLabel,
   onNodeLabelChange,
   onComponentLabelChange,
   onAhuSystemTypeChange,
+  onAhuRotationChange,
+  selectedAhuConnectedDuctCount,
   onAhuDimensionChange,
   onTerminalFlowRateChange,
   onTerminalTypeChange,
@@ -125,9 +131,12 @@ export function Sidebar({
         selectedNodeFittings={selectedNodeFittings}
         selectedComponent={selectedComponent}
         selectedComponentResult={selectedComponentResult}
+        selectedDuctAirSystemLabel={selectedDuctAirSystemLabel}
         onNodeLabelChange={onNodeLabelChange}
         onComponentLabelChange={onComponentLabelChange}
         onAhuSystemTypeChange={onAhuSystemTypeChange}
+        onAhuRotationChange={onAhuRotationChange}
+        selectedAhuConnectedDuctCount={selectedAhuConnectedDuctCount}
         onAhuDimensionChange={onAhuDimensionChange}
         onTerminalFlowRateChange={onTerminalFlowRateChange}
         onTerminalTypeChange={onTerminalTypeChange}

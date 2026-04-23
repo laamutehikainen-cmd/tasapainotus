@@ -1,4 +1,5 @@
 import { analyzeDuctRoutes } from "../calc";
+import { DEFAULT_AHU_PORT_OFFSET_METERS, getAhuPortAnchors } from "../components";
 import {
   beginDuctDraft,
   buildGraphFromEditorDocument,
@@ -165,5 +166,56 @@ describe("editorState", () => {
     );
 
     expect(document.automaticFittingOverrides).toHaveLength(0);
+  });
+
+  it("stores the selected AHU port on a duct drawn from an AHU connection point", () => {
+    let document = createInitialEditorDocument();
+
+    document = placeComponentAtPoint(document, "ahu", { x: 1, y: 2, z: 0 }).document;
+    document = placeComponentAtPoint(document, "supplyTerminal", { x: 5, y: 2, z: 0 }).document;
+
+    const ahu = document.components.find((component) => component.type === "ahu");
+    const ahuNode = document.nodes.find((node) => node.id === ahu?.nodeIds[0]);
+
+    expect(ahu?.type).toBe("ahu");
+    expect(ahuNode).toBeDefined();
+
+    const supplyPort = getAhuPortAnchors(
+      ahu!,
+      ahuNode!.position,
+      DEFAULT_AHU_PORT_OFFSET_METERS
+    ).find(
+      (port) => port.portType === "supply"
+    );
+
+    expect(supplyPort).toBeDefined();
+
+    const draft = beginDuctDraft(
+      document,
+      ahuNode!.position,
+      {
+        renderPosition: supplyPort!.position,
+        ahuConnection: {
+          componentId: ahu!.id,
+          nodeId: ahuNode!.id,
+          portType: "supply"
+        }
+      }
+    );
+    document = completeDuctDraft(document, draft, { x: 5, y: 2, z: 0 }).document;
+
+    const duct = document.components.find((component) => component.id === "duct-5");
+
+    expect(duct?.type).toBe("ductSegment");
+
+    if (!duct || duct.type !== "ductSegment") {
+      throw new Error("Expected duct segment.");
+    }
+
+    expect(duct.metadata.ahuConnection).toEqual({
+      componentId: "ahu-2",
+      nodeId: "node-1",
+      portType: "supply"
+    });
   });
 });

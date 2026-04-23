@@ -1,4 +1,5 @@
 import type { NodeId } from "../core/nodes";
+import type { AhuPortType } from "../airSystems";
 import {
   assertNonEmptyId,
   assertNonNegativeNumber,
@@ -20,6 +21,13 @@ export interface DuctMetadata {
   material: DuctMaterial;
   roughnessMm: number;
   localLossCoefficient: number;
+  ahuConnection: DuctAhuConnection | null;
+}
+
+export interface DuctAhuConnection {
+  componentId: string;
+  nodeId: NodeId;
+  portType: AhuPortType;
 }
 
 export interface CreateDuctSegmentInput {
@@ -33,6 +41,7 @@ export interface CreateDuctSegmentInput {
   roughnessMm?: number;
   localLossCoefficient?: number;
   label?: string;
+  ahuConnection?: DuctAhuConnection | null;
 }
 
 export type DuctSegmentComponent = InlineComponent<
@@ -88,7 +97,8 @@ export function createDuctSegment(
       material: input.material ?? "galvanizedSteel",
       roughnessMm:
         input.roughnessMm ?? DEFAULT_GALVANIZED_STEEL_ROUGHNESS_MM,
-      localLossCoefficient: input.localLossCoefficient ?? 0
+      localLossCoefficient: input.localLossCoefficient ?? 0,
+      ahuConnection: input.ahuConnection ?? null
     }
   };
 }

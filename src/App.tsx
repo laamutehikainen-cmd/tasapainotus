@@ -7,9 +7,10 @@ import {
   type ComponentPerformanceResult,
   type RouteAnalysisResult
 } from "./calc";
-import { type NetworkComponent } from "./components";
+import { normalizeAhuRotationDegrees, type NetworkComponent } from "./components";
 import { type DuctNode } from "./core/nodes";
 import { normalizeRoundDuctDiameterMm } from "./data/ductSizes";
+import { deriveDuctAirSystemLookup, describeDuctConnection } from "./ductAirSystems";
 import { Canvas2D } from "./ui/canvas2d";
 import { Controls } from "./ui/controls";
 import {
@@ -23,6 +24,7 @@ import {
   placeComponentAtPoint,
   removeAutomaticFittingOverrideFromDocument,
   type DuctDraft,
+  type DuctDraftAnchor,
   type EditorDocument,
   type EditorSelection,
   type ToolMode,
@@ -86,6 +88,19 @@ function App() {
         )
       : [];
   let selectedComponentResult: ComponentPerformanceResult | null = null;
+  const ductAirSystems = deriveDuctAirSystemLookup(document, routeAnalysis);
+  const selectedDuctAirSystem =
+    selectedComponent?.type === "ductSegment"
+      ? ductAirSystems[selectedComponent.id] ?? null
+      : null;
+  const selectedAhuConnectedDuctCount =
+    selectedComponent?.type === "ahu"
+      ? document.components.filter(
+          (component) =>
+            component.type === "ductSegment" &&
+            component.nodeIds.includes(selectedComponent.nodeIds[0])
+        ).length
+      : 0;
 
   if (selectedComponent && routeAnalysis) {
     try {
@@ -191,7 +206,10 @@ function App() {
     );
   }
 
-  function handleCanvasPoint(point: { x: number; y: number; z: number }): void {
+  function handleCanvasPoint(
+    point: { x: number; y: number; z: number },
+    anchor: DuctDraftAnchor | null = null
+  ): void {
     try {
       if (activeTool === "select") {
         setSelection(null);
@@ -202,15 +220,15 @@ function App() {
 
       if (activeTool === "duct") {
         if (!ductDraft) {
-          setDuctDraft(beginDuctDraft(document, point));
+          setDuctDraft(beginDuctDraft(document, point, anchor));
           setSelection(null);
           setNotice("Duct start point locked. Pick the end point.");
 
           return;
         }
 
-        const result = completeDuctDraft(document, ductDraft, point);
-        const nextDraft = beginDuctDraft(result.document, point);
+        const result = completeDuctDraft(document, ductDraft, point, anchor);
+        const nextDraft = beginDuctDraft(result.document, point, anchor);
 
         applyDocumentState(result.document, result.selection, nextDraft);
         setNotice(
@@ -391,6 +409,30 @@ function App() {
     );
   }
 
+  function handleAhuRotationChange(value: number): void {
+    if (
+      selectedComponent?.type !== "ahu" ||
+      selectedAhuConnectedDuctCount > 0 ||
+      !Number.isFinite(value)
+    ) {
+      return;
+    }
+
+    applyDocumentState(
+      updateComponentInDocument(document, selectedComponent.id, (component) =>
+        component.type === "ahu"
+          ? {
+              ...component,
+              metadata: {
+                ...component.metadata,
+                rotationDegrees: normalizeAhuRotationDegrees(value)
+              }
+            }
+          : component
+      )
+    );
+  }
+
   function handleTerminalFlowRateChange(value: number): void {
     if (selectedComponent?.type !== "terminal" || !Number.isFinite(value) || value <= 0) {
       return;
@@ -563,6 +605,7 @@ function App() {
           <Canvas2D
             document={document}
             automaticFittings={routeAnalysis?.automaticFittings ?? []}
+            ductAirSystems={ductAirSystems}
             activeTool={activeTool}
             selection={selection}
             ductDraft={ductDraft}
@@ -574,6 +617,7 @@ function App() {
           <View3D
             document={deferredDocument}
             analysis={routeAnalysis}
+            ductAirSystems={ductAirSystems}
           />
         </div>
 
@@ -590,11 +634,18 @@ function App() {
         selectedComponent={selectedComponent}
         onNodeLabelChange={handleNodeLabelChange}
         onComponentLabelChange={handleComponentLabelChange}
-          onAhuSystemTypeChange={handleAhuSystemTypeChange}
+        onAhuSystemTypeChange={handleAhuSystemTypeChange}
+          onAhuRotationChange={handleAhuRotationChange}
+          selectedAhuConnectedDuctCount={selectedAhuConnectedDuctCount}
           onAhuDimensionChange={handleAhuDimensionChange}
           onTerminalFlowRateChange={handleTerminalFlowRateChange}
         onTerminalTypeChange={handleTerminalTypeChange}
         selectedComponentResult={selectedComponentResult}
+        selectedDuctAirSystemLabel={
+          selectedComponent?.type === "ductSegment"
+            ? describeDuctConnection(selectedComponent, selectedDuctAirSystem)
+            : null
+        }
         onDuctDiameterChange={handleDuctDiameterChange}
         onDuctLocalLossChange={handleDuctLocalLossChange}
         onAutomaticFittingLossChange={handleAutomaticFittingLossChange}

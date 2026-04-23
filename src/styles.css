@@ -660,8 +660,31 @@ body {
   stroke-width: 2;
 }
 
-.endpoint-ahu-port {
-  fill: rgba(98, 179, 202, 0.96);
+.endpoint-ahu-shell.is-selected {
+  stroke: rgba(229, 103, 58, 0.96);
+}
+
+.endpoint-ahu-axis {
+  stroke: rgba(247, 251, 253, 0.85);
+  stroke-width: 3;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.endpoint-ahu-port-dot {
+  stroke: rgba(255, 255, 255, 0.95);
+  stroke-width: 2.2;
+}
+
+.endpoint-ahu-port-label {
+  fill: var(--bg-deep);
+  font-size: 9px;
+  font-weight: 700;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.92);
+  stroke-width: 3px;
+  stroke-linejoin: round;
 }
 
 .endpoint-terminal-ring {

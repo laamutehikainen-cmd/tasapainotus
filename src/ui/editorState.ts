@@ -1,12 +1,15 @@
 import {
   createAhu,
   createDuctSegment,
+  getAhuPortAnchors,
   createTerminalDevice,
+  type DuctAhuConnection,
   type DuctSegmentComponent,
   type NetworkComponent,
   type TerminalDeviceComponent
 } from "../components";
 import type { AutomaticFittingOverride } from "../calc";
+import type { AhuPortType } from "../airSystems";
 import { clonePoint3D, type Point3D } from "../core/geometry";
 import { DuctNetworkGraph } from "../core/graph";
 import { createNode, type DuctNode } from "../core/nodes";
@@ -35,6 +38,13 @@ export type EditorSelection =
 export interface DuctDraft {
   startPosition: Point3D;
   startNodeId: string | null;
+  startRenderPosition: Point3D | null;
+  ahuConnection: DuctAhuConnection | null;
+}
+
+export interface DuctDraftAnchor {
+  renderPosition?: Point3D | null;
+  ahuConnection?: DuctAhuConnection | null;
 }
 
 export interface EditorDocument {
@@ -60,14 +70,19 @@ export function createInitialEditorDocument(): EditorDocument {
 
 export function beginDuctDraft(
   document: EditorDocument,
-  position: Point3D
+  position: Point3D,
+  anchor: DuctDraftAnchor | null = null
 ): DuctDraft {
   const snappedPosition = snapPointToGrid(position);
   const startNode = findNodeAtPosition(document, snappedPosition);
 
   return {
     startPosition: snappedPosition,
-    startNodeId: startNode?.id ?? null
+    startNodeId: anchor?.ahuConnection?.nodeId ?? startNode?.id ?? null,
+    startRenderPosition: anchor?.renderPosition
+      ? clonePoint3D(anchor.renderPosition)
+      : null,
+    ahuConnection: anchor?.ahuConnection ?? null
   };
 }
 
@@ -93,7 +108,8 @@ export function placeComponentAtPoint(
 export function completeDuctDraft(
   document: EditorDocument,
   draft: DuctDraft,
-  endPosition: Point3D
+  endPosition: Point3D,
+  anchor: DuctDraftAnchor | null = null
 ): EditorMutationResult {
   const snappedEndPosition = snapPointToGrid(endPosition);
 
@@ -114,9 +130,11 @@ export function completeDuctDraft(
   const endNodeResult = ensureConnectionNodeAtPosition(
     workingDocument,
     snappedEndPosition,
-    null
+    anchor?.ahuConnection?.nodeId ?? null
   );
   workingDocument = endNodeResult.document;
+
+  const ahuConnection = draft.ahuConnection ?? anchor?.ahuConnection ?? null;
 
   const duplicateSegment = workingDocument.components.find(
     (component) =>
@@ -127,6 +145,10 @@ export function completeDuctDraft(
 
   if (duplicateSegment) {
     throw new Error("A duct already exists between these nodes.");
+  }
+
+  if (ahuConnection && isAhuPortAlreadyConnected(workingDocument, ahuConnection)) {
+    throw new Error(`AHU ${ahuConnection.portType} port is already connected.`);
   }
 
   const ductId = createId(workingDocument, "duct");
@@ -141,10 +163,11 @@ export function completeDuctDraft(
         endNodeId: endNodeResult.nodeId,
         diameterMm: 250,
         lengthMeters: calculatePlanarDistanceMeters(
-          draft.startPosition,
-          snappedEndPosition
+          draft.startRenderPosition ?? draft.startPosition,
+          anchor?.renderPosition ?? snappedEndPosition
         ),
-        label: `Duct ${workingDocument.nextSequence}`
+        label: `Duct ${workingDocument.nextSequence}`,
+        ahuConnection
       })
     ]
   };
@@ -530,7 +553,8 @@ function splitDuctSegmentAtNode(
       startNode.position,
       nodePosition,
       "A",
-      document.nextSequence
+      document.nextSequence,
+      document
     ),
     createDerivedDuctSegment(
       segment,
@@ -540,7 +564,8 @@ function splitDuctSegmentAtNode(
       nodePosition,
       endNode.position,
       "B",
-      document.nextSequence + 1
+      document.nextSequence + 1,
+      document
     )
   ];
 
@@ -562,18 +587,41 @@ function createDerivedDuctSegment(
   startPosition: Point3D,
   endPosition: Point3D,
   splitSuffix: "A" | "B",
-  fallbackSequence: number
+  fallbackSequence: number,
+  document: EditorDocument
 ): DuctSegmentComponent {
+  const ahuConnection =
+    sourceSegment.metadata.ahuConnection &&
+    (startNodeId === sourceSegment.metadata.ahuConnection.nodeId ||
+      endNodeId === sourceSegment.metadata.ahuConnection.nodeId)
+      ? sourceSegment.metadata.ahuConnection
+      : null;
+  const ahuRenderPosition = ahuConnection
+    ? resolveAhuConnectionRenderPosition(document, ahuConnection)
+    : null;
+  const renderedStartPosition =
+    ahuConnection && startNodeId === ahuConnection.nodeId
+      ? ahuRenderPosition ?? startPosition
+      : startPosition;
+  const renderedEndPosition =
+    ahuConnection && endNodeId === ahuConnection.nodeId
+      ? ahuRenderPosition ?? endPosition
+      : endPosition;
+
   return createDuctSegment({
     id,
     startNodeId,
     endNodeId,
     diameterMm: sourceSegment.geometry.diameterMm,
-    lengthMeters: calculatePlanarDistanceMeters(startPosition, endPosition),
+    lengthMeters: calculatePlanarDistanceMeters(
+      renderedStartPosition,
+      renderedEndPosition
+    ),
     designFlowRateLps: sourceSegment.flow.designFlowRateLps ?? undefined,
     material: sourceSegment.metadata.material,
     roughnessMm: sourceSegment.metadata.roughnessMm,
     localLossCoefficient: sourceSegment.metadata.localLossCoefficient,
+    ahuConnection,
     label: sourceSegment.metadata.label
       ? `${sourceSegment.metadata.label} ${splitSuffix}`
       : `Duct ${fallbackSequence}`
@@ -713,6 +761,39 @@ function updateTerminalFlow(
 
 function createId(document: EditorDocument, prefix: string): string {
   return `${prefix}-${document.nextSequence}`;
+}
+
+function isAhuPortAlreadyConnected(
+  document: EditorDocument,
+  ahuConnection: DuctAhuConnection
+): boolean {
+  return document.components.some(
+    (component) =>
+      component.type === "ductSegment" &&
+      component.metadata.ahuConnection?.componentId === ahuConnection.componentId &&
+      component.metadata.ahuConnection.portType === ahuConnection.portType
+  );
+}
+
+function resolveAhuConnectionRenderPosition(
+  document: EditorDocument,
+  ahuConnection: DuctAhuConnection
+): Point3D {
+  const ahu = document.components.find(
+    (component): component is Extract<NetworkComponent, { type: "ahu" }> =>
+      component.type === "ahu" && component.id === ahuConnection.componentId
+  );
+  const node = findNodeById(document, ahuConnection.nodeId);
+
+  if (!ahu || !node) {
+    return node?.position ?? { x: 0, y: 0, z: 0 };
+  }
+
+  const anchor = getAhuPortAnchors(ahu, node.position, 0).find(
+    (candidate) => candidate.portType === ahuConnection.portType
+  );
+
+  return anchor?.position ?? node.position;
 }
 
 function calculatePlanarDistanceMeters(

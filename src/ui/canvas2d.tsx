@@ -1,10 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import type { AutomaticFittingResult } from "../calc";
-import type { NetworkComponent } from "../components";
+import {
+  DEFAULT_AHU_PORT_OFFSET_METERS,
+  getAhuPortAnchors,
+  type AhuComponent,
+  type NetworkComponent
+} from "../components";
+import {
+  getAirSystemColor,
+  type AirSystemType
+} from "../airSystems";
 import type { Point3D } from "../core/geometry";
 import type { DuctNode } from "../core/nodes";
 import { GRID_STEP_METERS } from "../core/snapping";
 import type {
+  DuctDraftAnchor,
   DuctDraft,
   EditorDocument,
   EditorSelection,
@@ -45,12 +55,13 @@ interface PanSession {
 interface Canvas2DProps {
   document: EditorDocument;
   automaticFittings: AutomaticFittingResult[];
+  ductAirSystems: Record<string, AirSystemType>;
   activeTool: ToolMode;
   selection: EditorSelection;
   ductDraft: DuctDraft | null;
   hoverPoint: Point3D | null;
   onHoverPointChange: (point: Point3D | null) => void;
-  onCanvasPoint: (point: Point3D) => void;
+  onCanvasPoint: (point: Point3D, anchor?: DuctDraftAnchor | null) => void;
   onSelectionChange: (selection: EditorSelection) => void;
 }
 
@@ -59,6 +70,7 @@ type CanvasPointerEvent = React.PointerEvent<SVGElement>;
 export function Canvas2D({
   document,
   automaticFittings,
+  ductAirSystems,
   activeTool,
   selection,
   ductDraft,
@@ -246,6 +258,36 @@ export function Canvas2D({
     onCanvasPoint(point);
   }
 
+  function handleAhuPortPointerDown(
+    event: React.PointerEvent<SVGCircleElement | SVGTextElement>,
+    component: AhuComponent,
+    node: DuctNode,
+    portPosition: Point3D,
+    portType: NonNullable<
+      Extract<NetworkComponent, { type: "ductSegment" }>["metadata"]["ahuConnection"]
+    >["portType"]
+  ): void {
+    event.stopPropagation();
+
+    if (activeTool === "select") {
+      onSelectionChange({
+        kind: "component",
+        id: component.id
+      });
+
+      return;
+    }
+
+    onCanvasPoint(node.position, {
+      renderPosition: portPosition,
+      ahuConnection: {
+        componentId: component.id,
+        nodeId: node.id,
+        portType
+      }
+    });
+  }
+
   function handleDuctPointerDown(
     event: React.PointerEvent<SVGLineElement>,
     nextSelection: EditorSelection
@@ -363,8 +405,12 @@ export function Canvas2D({
                 return null;
               }
 
-              const start = toCanvasPoint(startNode.position);
-              const end = toCanvasPoint(endNode.position);
+              const { start, end } = getRenderedDuctCanvasEndpoints(
+                component,
+                startNode,
+                endNode,
+                document
+              );
               const isSelected =
                 selection?.kind === "component" && selection.id === component.id;
 
@@ -377,6 +423,9 @@ export function Canvas2D({
                     y2={end.y}
                     className={isSelected ? "duct-line is-selected" : "duct-line"}
                     style={{
+                      stroke: isSelected
+                        ? undefined
+                        : getAirSystemColor(ductAirSystems[component.id]),
                       strokeWidth: Math.max(
                         4,
                         component.geometry.diameterMm / 70
@@ -497,7 +546,9 @@ export function Canvas2D({
                     });
                   }}
                 >
-                  {renderEndpointSymbol(component, point)}
+                  {component.type === "ahu"
+                    ? renderAhuSymbol(component, node.position, isSelected, activeTool, node, handleAhuPortPointerDown)
+                    : renderTerminalSymbol(component, point)}
                   <text x={point.x} y={point.y + 34} className="endpoint-label">
                     {component.metadata.label}
                   </text>
@@ -538,8 +589,8 @@ export function Canvas2D({
 
         {ductDraft && hoverPoint ? (
           <line
-            x1={toCanvasPoint(ductDraft.startPosition).x}
-            y1={toCanvasPoint(ductDraft.startPosition).y}
+            x1={toCanvasPoint(ductDraft.startRenderPosition ?? ductDraft.startPosition).x}
+            y1={toCanvasPoint(ductDraft.startRenderPosition ?? ductDraft.startPosition).y}
             x2={toCanvasPoint(hoverPoint).x}
             y2={toCanvasPoint(hoverPoint).y}
             className="draft-line"
@@ -573,33 +624,97 @@ export function Canvas2D({
   );
 }
 
-function renderEndpointSymbol(
-  component: Extract<NetworkComponent, { type: "ahu" | "terminal" }>,
+function renderAhuSymbol(
+  component: AhuComponent,
+  position: Point3D,
+  isSelected: boolean,
+  activeTool: ToolMode,
+  node: DuctNode,
+  onPortPointerDown: (
+    event: React.PointerEvent<SVGCircleElement | SVGTextElement>,
+    component: AhuComponent,
+    node: DuctNode,
+    portPosition: Point3D,
+    portType: NonNullable<
+      Extract<NetworkComponent, { type: "ductSegment" }>["metadata"]["ahuConnection"]
+    >["portType"]
+  ) => void
+) {
+  const center = toCanvasPoint(position);
+  const widthPx = component.geometry.widthMeters * CANVAS_SCALE_PX_PER_METER;
+  const depthPx = component.geometry.depthMeters * CANVAS_SCALE_PX_PER_METER;
+  const ports = getAhuPortAnchors(
+    component,
+    position,
+    DEFAULT_AHU_PORT_OFFSET_METERS
+  );
+
+  return (
+    <>
+      <rect
+        className={isSelected ? "endpoint-ahu-shell is-selected" : "endpoint-ahu-shell"}
+        x={center.x - widthPx / 2}
+        y={center.y - depthPx / 2}
+        width={widthPx}
+        height={depthPx}
+        rx="10"
+        transform={`rotate(${component.metadata.rotationDegrees} ${center.x} ${center.y})`}
+      />
+      <line
+        className="endpoint-ahu-axis"
+        x1={center.x}
+        y1={center.y}
+        x2={center.x + Math.cos((component.metadata.rotationDegrees * Math.PI) / 180) * (widthPx / 2 - 16)}
+        y2={center.y + Math.sin((component.metadata.rotationDegrees * Math.PI) / 180) * (widthPx / 2 - 16)}
+      />
+      {ports.map((port) => {
+        const portPoint = toCanvasPoint(port.position);
+
+        return (
+          <g key={`${component.id}-${port.portType}`}>
+            <circle
+              cx={portPoint.x}
+              cy={portPoint.y}
+              r="8"
+              className="endpoint-ahu-port-dot"
+              style={{ fill: port.color, cursor: activeTool === "duct" ? "crosshair" : "pointer" }}
+              onPointerDown={(event) =>
+                onPortPointerDown(
+                  event,
+                  component,
+                  node,
+                  port.position,
+                  port.portType
+                )
+              }
+            />
+            <text
+              x={portPoint.x}
+              y={portPoint.y - 12}
+              className="endpoint-ahu-port-label"
+              onPointerDown={(event) =>
+                onPortPointerDown(
+                  event,
+                  component,
+                  node,
+                  port.position,
+                  port.portType
+                )
+              }
+            >
+              {port.shortLabel}
+            </text>
+          </g>
+        );
+      })}
+    </>
+  );
+}
+
+function renderTerminalSymbol(
+  component: Extract<NetworkComponent, { type: "terminal" }>,
   point: { x: number; y: number }
 ) {
-  if (component.type === "ahu") {
-    return (
-      <>
-        <rect
-          className="endpoint-ahu-shell"
-          x={point.x - 22}
-          y={point.y - 18}
-          width="44"
-          height="36"
-          rx="8"
-        />
-        <rect
-          className="endpoint-ahu-port"
-          x={point.x + 18}
-          y={point.y - 6}
-          width="12"
-          height="12"
-          rx="3"
-        />
-      </>
-    );
-  }
-
   switch (component.metadata.terminalType) {
     case "supply":
       return (
@@ -796,6 +911,53 @@ function summarizeNodeFittings(
   }
 
   return [...summaries.values()];
+}
+
+function getRenderedDuctCanvasEndpoints(
+  component: Extract<NetworkComponent, { type: "ductSegment" }>,
+  startNode: DuctNode,
+  endNode: DuctNode,
+  document: EditorDocument
+): {
+  start: { x: number; y: number };
+  end: { x: number; y: number };
+} {
+  let startPosition = startNode.position;
+  let endPosition = endNode.position;
+  const ahuConnection = component.metadata.ahuConnection;
+
+  if (ahuConnection) {
+    const ahu = document.components.find(
+      (candidate): candidate is AhuComponent =>
+        candidate.type === "ahu" && candidate.id === ahuConnection.componentId
+    );
+    const ahuNode = ahu ? findNode(document.nodes, ahuConnection.nodeId) : null;
+
+    if (ahu && ahuNode) {
+      const anchor = getAhuPortAnchors(
+        ahu,
+        ahuNode.position,
+        DEFAULT_AHU_PORT_OFFSET_METERS
+      ).find(
+        (candidate) => candidate.portType === ahuConnection.portType
+      );
+
+      if (anchor) {
+        if (startNode.id === ahuConnection.nodeId) {
+          startPosition = anchor.position;
+        }
+
+        if (endNode.id === ahuConnection.nodeId) {
+          endPosition = anchor.position;
+        }
+      }
+    }
+  }
+
+  return {
+    start: toCanvasPoint(startPosition),
+    end: toCanvasPoint(endPosition)
+  };
 }
 
 function clamp(value: number, min: number, max: number): number {

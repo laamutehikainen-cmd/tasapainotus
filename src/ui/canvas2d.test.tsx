@@ -44,6 +44,7 @@ describe("Canvas2D", () => {
       <Canvas2D
         document={document}
         automaticFittings={[]}
+        ductAirSystems={{}}
         activeTool="duct"
         selection={null}
         ductDraft={null}
@@ -72,6 +73,7 @@ describe("Canvas2D", () => {
       <Canvas2D
         document={document}
         automaticFittings={[]}
+        ductAirSystems={{}}
         activeTool="supplyTerminal"
         selection={null}
         ductDraft={null}
@@ -101,6 +103,7 @@ describe("Canvas2D", () => {
       <Canvas2D
         document={document}
         automaticFittings={[]}
+        ductAirSystems={{}}
         activeTool="select"
         selection={null}
         ductDraft={null}
@@ -130,6 +133,7 @@ describe("Canvas2D", () => {
       <Canvas2D
         document={document}
         automaticFittings={[]}
+        ductAirSystems={{}}
         activeTool="select"
         selection={null}
         ductDraft={null}
@@ -168,6 +172,7 @@ describe("Canvas2D", () => {
       <Canvas2D
         document={document}
         automaticFittings={[]}
+        ductAirSystems={{}}
         activeTool="duct"
         selection={null}
         ductDraft={null}
@@ -215,6 +220,7 @@ describe("Canvas2D", () => {
       <Canvas2D
         document={document}
         automaticFittings={automaticFittings}
+        ductAirSystems={{}}
         activeTool="select"
         selection={null}
         ductDraft={null}
@@ -237,6 +243,41 @@ describe("Canvas2D", () => {
       kind: "node",
       id: "node-5"
     });
+  });
+
+  it("starts duct drawing from a color-coded AHU port anchor", () => {
+    const document = createDocumentWithEndpointAndJunction();
+    const onCanvasPoint = vi.fn();
+    const { container } = render(
+      <Canvas2D
+        document={document}
+        automaticFittings={[]}
+        ductAirSystems={{}}
+        activeTool="duct"
+        selection={null}
+        ductDraft={null}
+        hoverPoint={null}
+        onHoverPointChange={() => {}}
+        onCanvasPoint={onCanvasPoint}
+        onSelectionChange={() => {}}
+      />
+    );
+
+    const portDot = container.querySelector(".endpoint-ahu-port-dot");
+
+    expect(portDot).not.toBeNull();
+
+    fireEvent.pointerDown(portDot!);
+
+    expect(onCanvasPoint).toHaveBeenCalledWith(
+      { x: 1, y: 2, z: 0 },
+      expect.objectContaining({
+        ahuConnection: expect.objectContaining({
+          portType: "supply",
+          componentId: "ahu-2"
+        })
+      })
+    );
   });
 });
 
