@@ -16,6 +16,8 @@ export {
 } from "./flowPropagation";
 export {
   analyzeAutomaticRouteFittings,
+  createAutomaticFittingOverrideKey,
+  type AutomaticFittingOverride,
   type AutomaticFittingResult,
   type AutomaticFittingType
 } from "./fittings";

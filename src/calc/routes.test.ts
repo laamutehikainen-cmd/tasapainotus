@@ -2,7 +2,10 @@ import { createAhu, createDuctSegment, createTerminalDevice } from "../component
 import { createSampleDuctNetwork } from "../core/examples";
 import { DuctNetworkGraph } from "../core/graph";
 import { createNode } from "../core/nodes";
-import { analyzeDuctRoutes } from "./routes";
+import {
+  analyzeDuctRoutes,
+  createAutomaticFittingOverrideKey
+} from "./index";
 
 describe("analyzeDuctRoutes", () => {
   it("returns a route breakdown for each terminal and identifies the critical path", () => {
@@ -112,6 +115,40 @@ describe("analyzeDuctRoutes", () => {
     ]);
     expect(route.totalFittingPressureLossPa).toBeGreaterThan(0);
     expect(route.totalPressureLossPa).toBeGreaterThan(route.totalComponentPressureLossPa);
+  });
+
+  it("applies manual zeta overrides to automatic fittings", () => {
+    const baselineAnalysis = analyzeDuctRoutes(createSampleDuctNetwork());
+    const overriddenAnalysis = analyzeDuctRoutes(createSampleDuctNetwork(), {
+      automaticFittingOverrides: [
+        {
+          key: createAutomaticFittingOverrideKey(
+            "node-main",
+            "tee",
+            "duct-branch-a"
+          ),
+          nodeId: "node-main",
+          fittingType: "tee",
+          downstreamComponentId: "duct-branch-a",
+          lossCoefficient: 1.2
+        }
+      ]
+    });
+
+    const baselineRoute = baselineAnalysis.routes.find(
+      (route) => route.terminalId === "terminal-room-a"
+    );
+    const overriddenRoute = overriddenAnalysis.routes.find(
+      (route) => route.terminalId === "terminal-room-a"
+    );
+
+    expect(baselineRoute).toBeDefined();
+    expect(overriddenRoute).toBeDefined();
+    expect(overriddenRoute!.totalPressureLossPa).toBeGreaterThan(
+      baselineRoute!.totalPressureLossPa
+    );
+    expect(overriddenRoute!.fittingBreakdown[0]?.manualOverrideApplied).toBe(true);
+    expect(overriddenRoute!.fittingBreakdown[0]?.lossCoefficient).toBe(1.2);
   });
 });
 

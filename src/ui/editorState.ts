@@ -6,6 +6,7 @@ import {
   type NetworkComponent,
   type TerminalDeviceComponent
 } from "../components";
+import type { AutomaticFittingOverride } from "../calc";
 import { clonePoint3D, type Point3D } from "../core/geometry";
 import { DuctNetworkGraph } from "../core/graph";
 import { createNode, type DuctNode } from "../core/nodes";
@@ -39,6 +40,7 @@ export interface DuctDraft {
 export interface EditorDocument {
   nodes: DuctNode[];
   components: NetworkComponent[];
+  automaticFittingOverrides: AutomaticFittingOverride[];
   nextSequence: number;
 }
 
@@ -51,6 +53,7 @@ export function createInitialEditorDocument(): EditorDocument {
   return {
     nodes: [],
     components: [],
+    automaticFittingOverrides: [],
     nextSequence: 1
   };
 }
@@ -242,6 +245,38 @@ export function updateComponentInDocument(
     ...document,
     components: document.components.map((component) =>
       component.id === componentId ? updater(component) : component
+    )
+  });
+}
+
+export function upsertAutomaticFittingOverrideInDocument(
+  document: EditorDocument,
+  override: AutomaticFittingOverride
+): EditorDocument {
+  const existingOverrideIndex = document.automaticFittingOverrides.findIndex(
+    (candidate) => candidate.key === override.key
+  );
+  const automaticFittingOverrides =
+    existingOverrideIndex >= 0
+      ? document.automaticFittingOverrides.map((candidate, index) =>
+          index === existingOverrideIndex ? override : candidate
+        )
+      : [...document.automaticFittingOverrides, override];
+
+  return finalizeDocument({
+    ...document,
+    automaticFittingOverrides
+  });
+}
+
+export function removeAutomaticFittingOverrideFromDocument(
+  document: EditorDocument,
+  overrideKey: string
+): EditorDocument {
+  return finalizeDocument({
+    ...document,
+    automaticFittingOverrides: document.automaticFittingOverrides.filter(
+      (override) => override.key !== overrideKey
     )
   });
 }
@@ -574,9 +609,17 @@ function finalizeDocument(document: EditorDocument): EditorDocument {
       )
       .flatMap((component) => [...component.nodeIds])
   );
+  const synchronizedOverrides = synchronizedDocument.automaticFittingOverrides.filter(
+    (override) =>
+      referencedNodeIds.has(override.nodeId) &&
+      synchronizedDocument.components.some(
+        (component) => component.id === override.downstreamComponentId
+      )
+  );
 
   return {
     ...synchronizedDocument,
+    automaticFittingOverrides: synchronizedOverrides,
     nodes: synchronizedDocument.nodes
       .filter((node) => referencedNodeIds.has(node.id))
       .map((node) => ({

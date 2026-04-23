@@ -6,6 +6,8 @@ import {
   createInitialEditorDocument,
   deleteSelection,
   placeComponentAtPoint,
+  removeAutomaticFittingOverrideFromDocument,
+  upsertAutomaticFittingOverrideInDocument,
   updateComponentInDocument
 } from "./editorState";
 
@@ -114,5 +116,54 @@ describe("editorState", () => {
     expect(ductSegments).toHaveLength(3);
     expect(graph.getNodes()).toHaveLength(4);
     expect(graph.getEdges()).toHaveLength(3);
+  });
+
+  it("stores and removes automatic fitting overrides in the editor document", () => {
+    let document = createInitialEditorDocument();
+
+    document = placeComponentAtPoint(document, "ahu", { x: 0, y: 0, z: 0 }).document;
+    document = placeComponentAtPoint(document, "supplyTerminal", { x: 4, y: 0, z: 0 }).document;
+    document = placeComponentAtPoint(document, "supplyTerminal", { x: 2, y: 2, z: 0 }).document;
+
+    let draft = beginDuctDraft(document, { x: 0, y: 0, z: 0 });
+    document = completeDuctDraft(document, draft, { x: 4, y: 0, z: 0 }).document;
+    draft = beginDuctDraft(document, { x: 2, y: 2, z: 0 });
+    document = completeDuctDraft(document, draft, { x: 2, y: 0, z: 0 }).document;
+
+    const junctionNode = document.nodes.find(
+      (node) => node.position.x === 2 && node.position.y === 0
+    );
+    const branchComponent = document.components.find(
+      (component) =>
+        component.type === "ductSegment" &&
+        junctionNode !== undefined &&
+        component.nodeIds.includes(junctionNode.id) &&
+        component.geometry.lengthMeters === 2
+    );
+
+    expect(junctionNode).toBeDefined();
+    expect(branchComponent?.type).toBe("ductSegment");
+
+    document = upsertAutomaticFittingOverrideInDocument(document, {
+      key: `${junctionNode!.id}::tee::${branchComponent!.id}`,
+      nodeId: junctionNode!.id,
+      fittingType: "tee",
+      downstreamComponentId: branchComponent!.id,
+      lossCoefficient: 0.9
+    });
+
+    expect(document.automaticFittingOverrides).toEqual([
+      expect.objectContaining({
+        key: `${junctionNode!.id}::tee::${branchComponent!.id}`,
+        lossCoefficient: 0.9
+      })
+    ]);
+
+    document = removeAutomaticFittingOverrideFromDocument(
+      document,
+      `${junctionNode!.id}::tee::${branchComponent!.id}`
+    );
+
+    expect(document.automaticFittingOverrides).toHaveLength(0);
   });
 });

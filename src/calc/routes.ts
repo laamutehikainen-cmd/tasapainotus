@@ -18,6 +18,7 @@ import {
 } from "./balancing";
 import {
   analyzeAutomaticRouteFittings,
+  type AutomaticFittingOverride,
   createNodePairKey,
   type AutomaticFittingResult
 } from "./fittings";
@@ -67,13 +68,17 @@ export interface RouteAnalysisResult {
   networkPerformance: NetworkPerformanceAnalysis;
   routes: TerminalRouteResult[];
   criticalPath: TerminalRouteResult | null;
+  automaticFittings: AutomaticFittingResult[];
   systems: RouteSystemsSummary;
   balancing: BalancingAnalysisResult;
 }
 
 export function analyzeDuctRoutes(
   graph: DuctNetworkGraph,
-  options: NetworkPerformanceOptions & BalancingOptions = {}
+  options: NetworkPerformanceOptions &
+    BalancingOptions & {
+      automaticFittingOverrides?: AutomaticFittingOverride[];
+    } = {}
 ): RouteAnalysisResult {
   const ahu = graph.getAhu();
 
@@ -93,16 +98,19 @@ export function analyzeDuctRoutes(
       ahu.id,
       terminalById,
       routeComponentIdLookup,
-      networkPerformance
+      networkPerformance,
+      options.automaticFittingOverrides ?? []
     )
   );
   const criticalPath = findCriticalPath(routes);
   const systems = createRouteSystemsSummary(routes);
+  const automaticFittings = createUniqueAutomaticFittings(routes);
 
   return {
     networkPerformance,
     routes,
     criticalPath,
+    automaticFittings,
     systems,
     balancing: analyzeRouteBalancing(graph, routes, options)
   };
@@ -114,7 +122,8 @@ function createTerminalRouteResult(
   ahuId: string,
   terminalById: Map<string, TerminalDeviceComponent>,
   routeComponentIdLookup: Map<string, string>,
-  networkPerformance: NetworkPerformanceAnalysis
+  networkPerformance: NetworkPerformanceAnalysis,
+  automaticFittingOverrides: AutomaticFittingOverride[]
 ): TerminalRouteResult {
   const terminal = terminalById.get(terminalPath.terminalId);
 
@@ -141,7 +150,8 @@ function createTerminalRouteResult(
     graph,
     terminalPath.nodePath,
     routeComponentIdLookup,
-    networkPerformance
+    networkPerformance,
+    automaticFittingOverrides
   );
   const totalComponentPressureLossPa = componentBreakdown.reduce(
     (sum, item) => sum + item.pressureLossPa,
@@ -165,6 +175,20 @@ function createTerminalRouteResult(
     totalFittingPressureLossPa,
     totalPressureLossPa: totalComponentPressureLossPa + totalFittingPressureLossPa
   };
+}
+
+function createUniqueAutomaticFittings(
+  routes: TerminalRouteResult[]
+): AutomaticFittingResult[] {
+  const fittingById = new Map<string, AutomaticFittingResult>();
+
+  for (const route of routes) {
+    for (const fitting of route.fittingBreakdown) {
+      fittingById.set(fitting.id, fitting);
+    }
+  }
+
+  return [...fittingById.values()];
 }
 
 function createRouteSystemsSummary(routes: TerminalRouteResult[]): RouteSystemsSummary {

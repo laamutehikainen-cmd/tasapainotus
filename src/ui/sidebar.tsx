@@ -1,4 +1,5 @@
 import type {
+  AutomaticFittingResult,
   BalancingSystemResult,
   ComponentPerformanceResult,
   RouteAnalysisResult,
@@ -17,6 +18,7 @@ interface SidebarProps {
   analysis: RouteAnalysisResult | null;
   analysisError: string | null;
   selectedNode: DuctNode | null;
+  selectedNodeFittings: AutomaticFittingResult[];
   selectedComponent: NetworkComponent | null;
   selectedComponentResult: ComponentPerformanceResult | null;
   onNodeLabelChange: (value: string) => void;
@@ -28,6 +30,11 @@ interface SidebarProps {
   ) => void;
   onDuctDiameterChange: (value: number) => void;
   onDuctLocalLossChange: (value: number) => void;
+  onAutomaticFittingLossChange: (
+    fitting: AutomaticFittingResult,
+    value: number
+  ) => void;
+  onAutomaticFittingReset: (fitting: AutomaticFittingResult) => void;
 }
 
 export function Sidebar({
@@ -35,6 +42,7 @@ export function Sidebar({
   analysis,
   analysisError,
   selectedNode,
+  selectedNodeFittings,
   selectedComponent,
   selectedComponentResult,
   onNodeLabelChange,
@@ -43,7 +51,9 @@ export function Sidebar({
   onTerminalFlowRateChange,
   onTerminalTypeChange,
   onDuctDiameterChange,
-  onDuctLocalLossChange
+  onDuctLocalLossChange,
+  onAutomaticFittingLossChange,
+  onAutomaticFittingReset
 }: SidebarProps) {
   return (
     <aside className="analysis-sidebar">
@@ -105,8 +115,9 @@ export function Sidebar({
         ) : null}
       </section>
 
-      <Properties
+        <Properties
         selectedNode={selectedNode}
+        selectedNodeFittings={selectedNodeFittings}
         selectedComponent={selectedComponent}
         selectedComponentResult={selectedComponentResult}
         onNodeLabelChange={onNodeLabelChange}
@@ -116,6 +127,8 @@ export function Sidebar({
         onTerminalTypeChange={onTerminalTypeChange}
         onDuctDiameterChange={onDuctDiameterChange}
         onDuctLocalLossChange={onDuctLocalLossChange}
+        onAutomaticFittingLossChange={onAutomaticFittingLossChange}
+        onAutomaticFittingReset={onAutomaticFittingReset}
       />
 
       <section className="sidebar-section" aria-label="Route analysis">

@@ -1,4 +1,7 @@
-import type { ComponentPerformanceResult } from "../calc";
+import type {
+  AutomaticFittingResult,
+  ComponentPerformanceResult
+} from "../calc";
 import type { NetworkComponent } from "../components";
 import type { DuctNode } from "../core/nodes";
 import {
@@ -10,6 +13,7 @@ interface PropertiesProps {
   selectedComponent: NetworkComponent | null;
   selectedComponentResult: ComponentPerformanceResult | null;
   selectedNode: DuctNode | null;
+  selectedNodeFittings: AutomaticFittingResult[];
   onNodeLabelChange: (value: string) => void;
   onComponentLabelChange: (value: string) => void;
   onAhuSystemTypeChange: (value: "supply" | "exhaust" | "mixed") => void;
@@ -19,19 +23,27 @@ interface PropertiesProps {
   ) => void;
   onDuctDiameterChange: (value: number) => void;
   onDuctLocalLossChange: (value: number) => void;
+  onAutomaticFittingLossChange: (
+    fitting: AutomaticFittingResult,
+    value: number
+  ) => void;
+  onAutomaticFittingReset: (fitting: AutomaticFittingResult) => void;
 }
 
 export function Properties({
   selectedComponent,
   selectedComponentResult,
   selectedNode,
+  selectedNodeFittings,
   onNodeLabelChange,
   onComponentLabelChange,
   onAhuSystemTypeChange,
   onTerminalFlowRateChange,
   onTerminalTypeChange,
   onDuctDiameterChange,
-  onDuctLocalLossChange
+  onDuctLocalLossChange,
+  onAutomaticFittingLossChange,
+  onAutomaticFittingReset
 }: PropertiesProps) {
   return (
     <section className="sidebar-section" aria-label="Properties">
@@ -66,6 +78,64 @@ export function Properties({
               {selectedNode.position.x.toFixed(1)} m, {selectedNode.position.y.toFixed(1)} m
             </strong>
           </div>
+          {selectedNodeFittings.length > 0 ? (
+            <div className="property-fitting-list">
+              {selectedNodeFittings.map((fitting) => (
+                <div key={fitting.id} className="property-fitting-card">
+                  <div className="property-meta">
+                    <span>{formatFittingType(fitting.fittingType)}</span>
+                    <strong>{fitting.downstreamComponentLabel}</strong>
+                  </div>
+                  <label className="property-field">
+                    <span>Zeta</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value={fitting.lossCoefficient}
+                      onChange={(event) =>
+                        onAutomaticFittingLossChange(
+                          fitting,
+                          Number(event.target.value)
+                        )
+                      }
+                    />
+                  </label>
+                  <div className="property-metric-grid">
+                    <div className="property-meta">
+                      <span>Default zeta</span>
+                      <strong>{fitting.defaultLossCoefficient.toFixed(2)}</strong>
+                    </div>
+                    <div className="property-meta">
+                      <span>Pressure loss</span>
+                      <strong>{formatPressure(fitting.pressureLossPa)}</strong>
+                    </div>
+                    <div className="property-meta">
+                      <span>Flow</span>
+                      <strong>{formatFlow(fitting.flowRateLps)}</strong>
+                    </div>
+                    <div className="property-meta">
+                      <span>Velocity</span>
+                      <strong>{formatVelocity(fitting.velocityMps)}</strong>
+                    </div>
+                  </div>
+                  {fitting.manualOverrideApplied ? (
+                    <button
+                      className="ghost-button"
+                      type="button"
+                      onClick={() => onAutomaticFittingReset(fitting)}
+                    >
+                      Reset to auto value
+                    </button>
+                  ) : (
+                    <p className="property-help">
+                      Auto-generated {formatFittingType(fitting.fittingType).toLowerCase()} loss.
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -264,4 +334,13 @@ function formatPerMeterPressure(
   }
 
   return `${(pressureLossPa / lengthMeters).toFixed(2)} Pa/m`;
+}
+
+function formatFittingType(value: AutomaticFittingResult["fittingType"]): string {
+  switch (value) {
+    case "elbow":
+      return "Elbow";
+    case "tee":
+      return "Tee";
+  }
 }

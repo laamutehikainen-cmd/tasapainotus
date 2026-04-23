@@ -1,7 +1,9 @@
 import { startTransition, useDeferredValue, useEffect, useState } from "react";
 import {
   analyzeDuctRoutes,
+  createAutomaticFittingOverrideKey,
   getComponentPerformanceResult,
+  type AutomaticFittingResult,
   type ComponentPerformanceResult,
   type RouteAnalysisResult
 } from "./calc";
@@ -19,10 +21,12 @@ import {
   findComponentById,
   findNodeById,
   placeComponentAtPoint,
+  removeAutomaticFittingOverrideFromDocument,
   type DuctDraft,
   type EditorDocument,
   type EditorSelection,
   type ToolMode,
+  upsertAutomaticFittingOverrideInDocument,
   updateComponentInDocument,
   updateNodeInDocument
 } from "./ui/editorState";
@@ -60,7 +64,9 @@ function App() {
     const graph = buildGraphFromEditorDocument(deferredDocument);
 
     if (graph.getAhu() && graph.getTerminals().length > 0) {
-      routeAnalysis = analyzeDuctRoutes(graph);
+      routeAnalysis = analyzeDuctRoutes(graph, {
+        automaticFittingOverrides: deferredDocument.automaticFittingOverrides
+      });
     }
   } catch (error) {
     analysisError =
@@ -73,6 +79,12 @@ function App() {
     selection?.kind === "component"
       ? findComponentById(document, selection.id)
       : null;
+  const selectedNodeFittings =
+    selectedNode && routeAnalysis
+      ? routeAnalysis.automaticFittings.filter(
+          (fitting) => fitting.nodeId === selectedNode.id
+        )
+      : [];
   let selectedComponentResult: ComponentPerformanceResult | null = null;
 
   if (selectedComponent && routeAnalysis) {
@@ -442,6 +454,42 @@ function App() {
     );
   }
 
+  function handleAutomaticFittingLossChange(
+    fitting: AutomaticFittingResult,
+    value: number
+  ): void {
+    if (!Number.isFinite(value) || value < 0) {
+      return;
+    }
+
+    applyDocumentState(
+      upsertAutomaticFittingOverrideInDocument(document, {
+        key: createAutomaticFittingOverrideKey(
+          fitting.nodeId,
+          fitting.fittingType,
+          fitting.downstreamComponentId
+        ),
+        nodeId: fitting.nodeId,
+        fittingType: fitting.fittingType,
+        downstreamComponentId: fitting.downstreamComponentId,
+        lossCoefficient: value
+      })
+    );
+  }
+
+  function handleAutomaticFittingReset(fitting: AutomaticFittingResult): void {
+    applyDocumentState(
+      removeAutomaticFittingOverrideFromDocument(
+        document,
+        createAutomaticFittingOverrideKey(
+          fitting.nodeId,
+          fitting.fittingType,
+          fitting.downstreamComponentId
+        )
+      )
+    );
+  }
+
   const ductCount = document.components.filter(
     (component) => component.type === "ductSegment"
   ).length;
@@ -509,17 +557,20 @@ function App() {
           }}
           analysis={routeAnalysis}
           analysisError={analysisError}
-          selectedNode={selectedNode}
-          selectedComponent={selectedComponent}
-          onNodeLabelChange={handleNodeLabelChange}
-          onComponentLabelChange={handleComponentLabelChange}
+        selectedNode={selectedNode}
+        selectedNodeFittings={selectedNodeFittings}
+        selectedComponent={selectedComponent}
+        onNodeLabelChange={handleNodeLabelChange}
+        onComponentLabelChange={handleComponentLabelChange}
           onAhuSystemTypeChange={handleAhuSystemTypeChange}
           onTerminalFlowRateChange={handleTerminalFlowRateChange}
-          onTerminalTypeChange={handleTerminalTypeChange}
-          selectedComponentResult={selectedComponentResult}
-          onDuctDiameterChange={handleDuctDiameterChange}
-          onDuctLocalLossChange={handleDuctLocalLossChange}
-        />
+        onTerminalTypeChange={handleTerminalTypeChange}
+        selectedComponentResult={selectedComponentResult}
+        onDuctDiameterChange={handleDuctDiameterChange}
+        onDuctLocalLossChange={handleDuctLocalLossChange}
+        onAutomaticFittingLossChange={handleAutomaticFittingLossChange}
+        onAutomaticFittingReset={handleAutomaticFittingReset}
+      />
       </section>
 
       <section className="workflow-strip" aria-label="Workflow guidance">
