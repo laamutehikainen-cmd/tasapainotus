@@ -535,6 +535,7 @@ function App() {
         <div className="workspace-main">
           <Canvas2D
             document={document}
+            automaticFittings={routeAnalysis?.automaticFittings ?? []}
             activeTool={activeTool}
             selection={selection}
             ductDraft={ductDraft}

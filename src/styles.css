@@ -344,6 +344,47 @@ body {
   stroke-linejoin: round;
 }
 
+.canvas-fitting-highlights,
+.canvas-fitting-highlight,
+.fitting-node-badge {
+  pointer-events: none;
+}
+
+.fitting-node-halo {
+  fill: rgba(44, 129, 156, 0.08);
+  stroke: rgba(44, 129, 156, 0.6);
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+}
+
+.canvas-fitting-highlight.is-selected .fitting-node-halo {
+  fill: rgba(229, 103, 58, 0.08);
+  stroke: rgba(229, 103, 58, 0.7);
+}
+
+.fitting-node-halo.has-override {
+  fill: rgba(229, 103, 58, 0.11);
+  stroke: rgba(229, 103, 58, 0.72);
+}
+
+.fitting-badge-pill {
+  fill: rgba(248, 252, 254, 0.96);
+  stroke: rgba(44, 129, 156, 0.72);
+  stroke-width: 1.5;
+}
+
+.fitting-badge-pill.has-override {
+  fill: rgba(255, 239, 231, 0.98);
+  stroke: rgba(229, 103, 58, 0.84);
+}
+
+.fitting-badge-label {
+  fill: var(--bg-deep);
+  font-size: 9px;
+  font-weight: 700;
+  text-anchor: middle;
+}
+
 .endpoint-marker {
   cursor: pointer;
 }

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { AutomaticFittingResult } from "../calc";
 import type { NetworkComponent } from "../components";
 import type { Point3D } from "../core/geometry";
 import type { DuctNode } from "../core/nodes";
@@ -43,6 +44,7 @@ interface PanSession {
 
 interface Canvas2DProps {
   document: EditorDocument;
+  automaticFittings: AutomaticFittingResult[];
   activeTool: ToolMode;
   selection: EditorSelection;
   ductDraft: DuctDraft | null;
@@ -56,6 +58,7 @@ type CanvasPointerEvent = React.PointerEvent<SVGElement>;
 
 export function Canvas2D({
   document,
+  automaticFittings,
   activeTool,
   selection,
   ductDraft,
@@ -69,6 +72,7 @@ export function Canvas2D({
   const [viewportOrigin, setViewportOrigin] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const panSessionRef = useRef<PanSession | null>(null);
+  const fittingsByNode = groupAutomaticFittingsByNode(automaticFittings);
   const viewBoxWidth =
     BASE_VIEWPORT_WIDTH_METERS * (1 / zoom) * CANVAS_SCALE_PX_PER_METER +
     CANVAS_PADDING_PX * 2;
@@ -404,6 +408,70 @@ export function Canvas2D({
             })}
         </g>
 
+        <g className="canvas-fitting-highlights" aria-hidden="true">
+          {document.nodes.map((node) => {
+            const nodeFittings = fittingsByNode.get(node.id);
+
+            if (!nodeFittings || nodeFittings.length === 0) {
+              return null;
+            }
+
+            const point = toCanvasPoint(node.position);
+            const fittingSummaries = summarizeNodeFittings(nodeFittings);
+            const hasOverride = nodeFittings.some(
+              (fitting) => fitting.manualOverrideApplied
+            );
+            const isSelected =
+              selection?.kind === "node" && selection.id === node.id;
+
+            return (
+              <g
+                key={`fitting-highlight-${node.id}`}
+                className={
+                  isSelected
+                    ? "canvas-fitting-highlight is-selected"
+                    : "canvas-fitting-highlight"
+                }
+              >
+                <circle
+                  cx={point.x}
+                  cy={point.y}
+                  r={hasOverride ? 17 : 15}
+                  className={
+                    hasOverride
+                      ? "fitting-node-halo has-override"
+                      : "fitting-node-halo"
+                  }
+                />
+                {fittingSummaries.map((summary, index) => (
+                  <g
+                    key={`${node.id}-${summary.fittingType}`}
+                    transform={`translate(${point.x - 12 + index * 26}, ${point.y - 29})`}
+                    className="fitting-node-badge"
+                  >
+                    <rect
+                      x="0"
+                      y="0"
+                      width="24"
+                      height="16"
+                      rx="8"
+                      className={
+                        summary.hasOverride
+                          ? "fitting-badge-pill has-override"
+                          : "fitting-badge-pill"
+                      }
+                    />
+                    <text x="12" y="11" className="fitting-badge-label">
+                      {describeFittingType(summary.fittingType)}
+                      {summary.count > 1 ? summary.count : ""}
+                    </text>
+                  </g>
+                ))}
+              </g>
+            );
+          })}
+        </g>
+
         <g className="canvas-endpoints">
           {document.components
             .filter((component) => component.type === "ahu" || component.type === "terminal")
@@ -664,6 +732,70 @@ function describeTool(tool: ToolMode): string {
     case "exhaustAirTerminal":
       return "Place exhaust air terminal";
   }
+}
+
+function describeFittingType(
+  fittingType: AutomaticFittingResult["fittingType"]
+): string {
+  switch (fittingType) {
+    case "elbow":
+      return "L";
+    case "tee":
+      return "T";
+  }
+}
+
+function groupAutomaticFittingsByNode(
+  automaticFittings: AutomaticFittingResult[]
+): Map<string, AutomaticFittingResult[]> {
+  const fittingsByNode = new Map<string, AutomaticFittingResult[]>();
+
+  for (const fitting of automaticFittings) {
+    const existingFittings = fittingsByNode.get(fitting.nodeId);
+
+    if (existingFittings) {
+      existingFittings.push(fitting);
+    } else {
+      fittingsByNode.set(fitting.nodeId, [fitting]);
+    }
+  }
+
+  return fittingsByNode;
+}
+
+function summarizeNodeFittings(
+  automaticFittings: AutomaticFittingResult[]
+): Array<{
+  fittingType: AutomaticFittingResult["fittingType"];
+  count: number;
+  hasOverride: boolean;
+}> {
+  const summaries = new Map<
+    AutomaticFittingResult["fittingType"],
+    {
+      fittingType: AutomaticFittingResult["fittingType"];
+      count: number;
+      hasOverride: boolean;
+    }
+  >();
+
+  for (const fitting of automaticFittings) {
+    const existingSummary = summaries.get(fitting.fittingType);
+
+    if (existingSummary) {
+      existingSummary.count += 1;
+      existingSummary.hasOverride =
+        existingSummary.hasOverride || fitting.manualOverrideApplied;
+    } else {
+      summaries.set(fitting.fittingType, {
+        fittingType: fitting.fittingType,
+        count: 1,
+        hasOverride: fitting.manualOverrideApplied
+      });
+    }
+  }
+
+  return [...summaries.values()];
 }
 
 function clamp(value: number, min: number, max: number): number {
