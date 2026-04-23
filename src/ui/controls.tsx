@@ -29,8 +29,8 @@ const toolbarButtons: ToolbarButton[] = [
   },
   {
     tool: "exhaustTerminal",
-    label: "Exhaust",
-    hint: "Place an exhaust terminal."
+    label: "Extract air",
+    hint: "Place an extract air terminal."
   },
   {
     tool: "outdoorTerminal",

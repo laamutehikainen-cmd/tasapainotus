@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { TerminalRouteResult } from "../calc/routes";
+import type { RouteAnalysisResult } from "../calc";
 import type { EditorDocument } from "../ui/editorState";
 import { createOrbitCamera, type OrbitCameraRig } from "./camera";
 import {
@@ -15,7 +15,7 @@ import {
 
 interface View3DProps {
   document: EditorDocument;
-  criticalPath: TerminalRouteResult | null;
+  analysis: RouteAnalysisResult | null;
 }
 
 interface View3DRuntime {
@@ -28,11 +28,11 @@ interface View3DRuntime {
 
 type View3DStatus = "initializing" | "ready" | "unsupported";
 
-export function View3D({ document, criticalPath }: View3DProps) {
+export function View3D({ document, analysis }: View3DProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const runtimeRef = useRef<View3DRuntime | null>(null);
   const [status, setStatus] = useState<View3DStatus>("initializing");
-  const sceneData = buildView3DSceneData(document, criticalPath);
+  const sceneData = buildView3DSceneData(document, analysis);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -103,7 +103,7 @@ export function View3D({ document, criticalPath }: View3DProps) {
     syncView3DScene(runtime.scene, sceneData);
     runtime.cameraRig.focus(sceneData.bounds);
     runtime.rendererHandle.renderer.render(runtime.scene, runtime.cameraRig.camera);
-  }, [criticalPath, document, sceneData]);
+  }, [analysis, document, sceneData]);
 
   return (
     <section className="viewer-stage" aria-label="3D preview">

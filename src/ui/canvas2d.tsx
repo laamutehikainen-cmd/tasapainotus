@@ -726,7 +726,7 @@ function describeTool(tool: ToolMode): string {
     case "supplyTerminal":
       return "Place supply terminal";
     case "exhaustTerminal":
-      return "Place exhaust terminal";
+      return "Place extract air terminal";
     case "outdoorTerminal":
       return "Place outdoor terminal";
     case "exhaustAirTerminal":

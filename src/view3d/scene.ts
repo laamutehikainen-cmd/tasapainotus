@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { TerminalRouteResult } from "../calc/routes";
+import type { RouteAnalysisResult } from "../calc";
 import type {
   AhuComponent,
   TerminalDeviceComponent,
@@ -13,9 +13,17 @@ const NETWORK_ROOT_NAME = "network-root";
 const ENVIRONMENT_ROOT_NAME = "environment-root";
 const DUCT_CENTERLINE_HEIGHT_METERS = 1.8;
 const AHU_COLLAR_LENGTH_METERS = 0.34;
+const AHU_PORT_SPACING_METERS = 0.4;
 const TERMINAL_NECK_LENGTH_METERS = 0.22;
 const TERMINAL_PLATE_THICKNESS_METERS = 0.03;
 const TERMINAL_PLATE_GAP_METERS = 0.045;
+
+export type View3DAirSystem =
+  | "supply"
+  | "extract"
+  | "outdoor"
+  | "exhaust"
+  | "mixed";
 
 export interface View3DBounds {
   minX: number;
@@ -33,27 +41,51 @@ export interface View3DDuctDescriptor {
   isCritical: boolean;
 }
 
-export interface View3DEndpointDescriptor {
+export interface View3DAhuPortDescriptor {
   id: string;
-  type: "ahu" | "terminal";
+  connectedDuctId: string;
+  airSystem: View3DAirSystem;
+  direction: Point3D;
+  anchorPosition: Point3D;
+  diameterMeters: number;
+  isCritical: boolean;
+}
+
+export interface View3DAhuEndpointDescriptor {
+  id: string;
+  type: "ahu";
+  label: string;
+  position: Point3D;
+  isCritical: boolean;
+  connectionDirection: null;
+  connectedDuctDiameterMeters: null;
+  geometry: {
+    type: "ahu";
+    widthMeters: number;
+    depthMeters: number;
+    heightMeters: number;
+    ports: View3DAhuPortDescriptor[];
+  };
+}
+
+export interface View3DTerminalEndpointDescriptor {
+  id: string;
+  type: "terminal";
   label: string;
   position: Point3D;
   isCritical: boolean;
   connectionDirection: Point3D | null;
   connectedDuctDiameterMeters: number | null;
-  geometry:
-    | {
-        type: "ahu";
-        widthMeters: number;
-        depthMeters: number;
-        heightMeters: number;
-      }
-    | {
-        type: "terminal";
-        markerSizeMeters: number;
-        terminalType: TerminalDeviceType;
-      };
+  geometry: {
+    type: "terminal";
+    markerSizeMeters: number;
+    terminalType: TerminalDeviceType;
+  };
 }
+
+export type View3DEndpointDescriptor =
+  | View3DAhuEndpointDescriptor
+  | View3DTerminalEndpointDescriptor;
 
 export interface View3DSceneData {
   ducts: View3DDuctDescriptor[];
@@ -63,31 +95,17 @@ export interface View3DSceneData {
 
 export function buildView3DSceneData(
   document: EditorDocument,
-  criticalPath: TerminalRouteResult | null
+  analysis: RouteAnalysisResult | null
 ): View3DSceneData {
-  const criticalComponentIds = new Set(criticalPath?.componentIds ?? []);
+  const criticalComponentIds = new Set(analysis?.criticalPath?.componentIds ?? []);
+  const connectedDuctSystemsById = createConnectedDuctSystemsById(analysis);
   const nodeById = new Map(document.nodes.map((node) => [node.id, node]));
   const connectedDuctsByNodeId = createConnectedDuctsByNodeId(document, nodeById);
-  const ducts: View3DDuctDescriptor[] = [];
   const endpoints: View3DEndpointDescriptor[] = [];
+  const ductAnchorByEdgeKey = new Map<string, Point3D>();
 
   for (const component of document.components) {
-    if (component.type === "ductSegment") {
-      const startNode = nodeById.get(component.nodeIds[0]);
-      const endNode = nodeById.get(component.nodeIds[1]);
-
-      if (!startNode || !endNode) {
-        continue;
-      }
-
-      ducts.push({
-        id: component.id,
-        start: startNode.position,
-        end: endNode.position,
-        diameterMeters: component.geometry.diameterMm / 1000,
-        isCritical: criticalComponentIds.has(component.id)
-      });
-
+    if (component.type !== "ahu" && component.type !== "terminal") {
       continue;
     }
 
@@ -98,14 +116,23 @@ export function buildView3DSceneData(
     }
 
     if (component.type === "ahu") {
-      endpoints.push(
-        createAhuDescriptor(
-          component,
-          node,
-          criticalComponentIds.has(component.id),
-          connectedDuctsByNodeId.get(node.id) ?? []
-        )
+      const endpoint = createAhuDescriptor(
+        component,
+        node,
+        criticalComponentIds.has(component.id),
+        connectedDuctsByNodeId.get(node.id) ?? [],
+        connectedDuctSystemsById,
+        criticalComponentIds
       );
+
+      endpoints.push(endpoint);
+
+      for (const port of endpoint.geometry.ports) {
+        ductAnchorByEdgeKey.set(
+          createDuctAnchorKey(port.connectedDuctId, node.id),
+          port.anchorPosition
+        );
+      }
 
       continue;
     }
@@ -120,10 +147,37 @@ export function buildView3DSceneData(
     );
   }
 
+  const ducts: View3DDuctDescriptor[] = [];
+
+  for (const component of document.components) {
+    if (component.type === "ductSegment") {
+      const startNode = nodeById.get(component.nodeIds[0]);
+      const endNode = nodeById.get(component.nodeIds[1]);
+
+      if (!startNode || !endNode) {
+        continue;
+      }
+
+      ducts.push({
+        id: component.id,
+        start:
+          ductAnchorByEdgeKey.get(createDuctAnchorKey(component.id, startNode.id)) ??
+          createElevatedPlanarPoint(startNode.position, DUCT_CENTERLINE_HEIGHT_METERS),
+        end:
+          ductAnchorByEdgeKey.get(createDuctAnchorKey(component.id, endNode.id)) ??
+          createElevatedPlanarPoint(endNode.position, DUCT_CENTERLINE_HEIGHT_METERS),
+        diameterMeters: component.geometry.diameterMm / 1000,
+        isCritical: criticalComponentIds.has(component.id)
+      });
+
+      continue;
+    }
+  }
+
   return {
     ducts,
     endpoints,
-    bounds: createBoundsFromNodes(document.nodes)
+    bounds: createBoundsFromSceneContent(ducts, endpoints)
   };
 }
 
@@ -209,8 +263,8 @@ function createEnvironmentRoot(bounds: View3DBounds | null): THREE.Group {
 }
 
 function createDuctMesh(duct: View3DDuctDescriptor): THREE.Mesh {
-  const start = toWorldPoint(duct.start, DUCT_CENTERLINE_HEIGHT_METERS);
-  const end = toWorldPoint(duct.end, DUCT_CENTERLINE_HEIGHT_METERS);
+  const start = toWorldAbsolutePoint(duct.start);
+  const end = toWorldAbsolutePoint(duct.end);
   const direction = new THREE.Vector3().subVectors(end, start);
   const length = direction.length();
   const radius = Math.max(duct.diameterMeters / 2, 0.05);
@@ -244,26 +298,14 @@ function createEndpointObject(endpoint: View3DEndpointDescriptor): THREE.Object3
   return createTerminalObject(endpoint);
 }
 
-function createAhuObject(endpoint: View3DEndpointDescriptor): THREE.Object3D {
-  if (endpoint.geometry.type !== "ahu") {
-    throw new Error("Expected AHU geometry for AHU endpoint.");
-  }
-
+function createAhuObject(
+  endpoint: View3DAhuEndpointDescriptor
+): THREE.Object3D {
   const group = new THREE.Group();
-  const connectionDirection = toWorldDirection(
-    endpoint.connectionDirection ?? { x: 1, y: 0, z: 0 }
+  const bodyCenter = toWorldPoint(
+    endpoint.position,
+    endpoint.geometry.heightMeters / 2
   );
-  const connectionPoint = toWorldPoint(endpoint.position, DUCT_CENTERLINE_HEIGHT_METERS);
-  const collarRadius = Math.max(
-    (endpoint.connectedDuctDiameterMeters ?? 0.28) / 2,
-    0.08
-  );
-  const bodyCenter = connectionPoint
-    .clone()
-    .addScaledVector(
-      connectionDirection,
-      -(AHU_COLLAR_LENGTH_METERS + endpoint.geometry.widthMeters / 2)
-    );
   const body = new THREE.Mesh(
     new THREE.BoxGeometry(
       endpoint.geometry.widthMeters,
@@ -278,30 +320,7 @@ function createAhuObject(endpoint: View3DEndpointDescriptor): THREE.Object3D {
   );
 
   body.position.copy(bodyCenter);
-  body.quaternion.setFromUnitVectors(
-    new THREE.Vector3(1, 0, 0),
-    connectionDirection
-  );
   group.add(body);
-
-  const collar = new THREE.Mesh(
-    new THREE.CylinderGeometry(collarRadius, collarRadius, AHU_COLLAR_LENGTH_METERS, 18),
-    new THREE.MeshStandardMaterial({
-      color: endpoint.isCritical ? "#f09a78" : "#2c819c",
-      roughness: 0.34,
-      metalness: 0.16
-    })
-  );
-  collar.position.copy(
-    connectionPoint
-      .clone()
-      .addScaledVector(connectionDirection, -AHU_COLLAR_LENGTH_METERS / 2)
-  );
-  collar.quaternion.setFromUnitVectors(
-    new THREE.Vector3(0, 1, 0),
-    connectionDirection
-  );
-  group.add(collar);
 
   const cap = new THREE.Mesh(
     new THREE.BoxGeometry(
@@ -321,6 +340,13 @@ function createAhuObject(endpoint: View3DEndpointDescriptor): THREE.Object3D {
   );
   cap.quaternion.copy(body.quaternion);
   group.add(cap);
+
+  for (const port of endpoint.geometry.ports) {
+    const collar = createAhuPortMesh(endpoint, port);
+
+    group.add(collar);
+  }
+
   group.userData = {
     componentId: endpoint.id,
     label: endpoint.label
@@ -330,12 +356,8 @@ function createAhuObject(endpoint: View3DEndpointDescriptor): THREE.Object3D {
 }
 
 function createTerminalObject(
-  endpoint: View3DEndpointDescriptor
+  endpoint: View3DTerminalEndpointDescriptor
 ): THREE.Object3D {
-  if (endpoint.geometry.type !== "terminal") {
-    throw new Error("Expected terminal geometry for terminal endpoint.");
-  }
-
   const color = endpoint.isCritical ? "#e5673a" : getTerminalColor(endpoint.geometry.terminalType);
   const material = new THREE.MeshStandardMaterial({
     color,
@@ -418,13 +440,79 @@ function createTerminalObject(
   return group;
 }
 
+function createAhuPortMesh(
+  endpoint: View3DAhuEndpointDescriptor,
+  port: View3DAhuPortDescriptor
+): THREE.Mesh {
+  const collarRadius = Math.max(port.diameterMeters / 2, 0.08);
+  const facePosition = createAhuBodyFacePosition(
+    endpoint.position,
+    endpoint.geometry,
+    port.direction,
+    port.anchorPosition
+  );
+  const start = toWorldAbsolutePoint(facePosition);
+  const end = toWorldAbsolutePoint(port.anchorPosition);
+  const direction = new THREE.Vector3().subVectors(end, start);
+  const length = Math.max(direction.length(), 0.01);
+  const mesh = new THREE.Mesh(
+    new THREE.CylinderGeometry(collarRadius, collarRadius, length, 18),
+    new THREE.MeshStandardMaterial({
+      color: port.isCritical ? "#e5673a" : getAirSystemColor(port.airSystem),
+      roughness: 0.34,
+      metalness: 0.16
+    })
+  );
+
+  mesh.position.copy(start).add(end).multiplyScalar(0.5);
+  mesh.quaternion.setFromUnitVectors(
+    new THREE.Vector3(0, 1, 0),
+    direction.normalize()
+  );
+
+  return mesh;
+}
+
+function createAhuBodyFacePosition(
+  centerPosition: Point3D,
+  geometry: View3DAhuEndpointDescriptor["geometry"],
+  direction: Point3D,
+  anchorPosition: Point3D
+): Point3D {
+  if (Math.abs(direction.x) >= Math.abs(direction.y)) {
+    return {
+      x:
+        centerPosition.x +
+        Math.sign(direction.x || 1) * (geometry.widthMeters / 2),
+      y: anchorPosition.y,
+      z: anchorPosition.z
+    };
+  }
+
+  return {
+    x: anchorPosition.x,
+    y:
+      centerPosition.y +
+      Math.sign(direction.y || 1) * (geometry.depthMeters / 2),
+    z: anchorPosition.z
+  };
+}
+
 function createAhuDescriptor(
   component: AhuComponent,
   node: DuctNode,
   isCritical: boolean,
-  connectedDucts: ConnectedDuctDescriptor[]
-): View3DEndpointDescriptor {
-  const connection = resolveEndpointConnection(node.position, connectedDucts);
+  connectedDucts: ConnectedDuctDescriptor[],
+  connectedDuctSystemsById: Map<string, View3DAirSystem>,
+  criticalComponentIds: Set<string>
+): View3DAhuEndpointDescriptor {
+  const ports = createAhuPortDescriptors(
+    component,
+    node,
+    connectedDucts,
+    connectedDuctSystemsById,
+    criticalComponentIds
+  );
 
   return {
     id: component.id,
@@ -432,13 +520,14 @@ function createAhuDescriptor(
     label: component.metadata.label,
     position: node.position,
     isCritical,
-    connectionDirection: connection.direction,
-    connectedDuctDiameterMeters: connection.connectedDuctDiameterMeters,
+    connectionDirection: null,
+    connectedDuctDiameterMeters: null,
     geometry: {
       type: "ahu",
       widthMeters: component.geometry.widthMeters,
       depthMeters: component.geometry.depthMeters,
-      heightMeters: component.geometry.heightMeters
+      heightMeters: component.geometry.heightMeters,
+      ports
     }
   };
 }
@@ -448,7 +537,7 @@ function createTerminalDescriptor(
   node: DuctNode,
   isCritical: boolean,
   connectedDucts: ConnectedDuctDescriptor[]
-): View3DEndpointDescriptor {
+): View3DTerminalEndpointDescriptor {
   const connection = resolveEndpointConnection(node.position, connectedDucts);
 
   return {
@@ -467,21 +556,56 @@ function createTerminalDescriptor(
   };
 }
 
-function createBoundsFromNodes(nodes: DuctNode[]): View3DBounds | null {
-  if (nodes.length === 0) {
-    return null;
+function createBoundsFromSceneContent(
+  ducts: View3DDuctDescriptor[],
+  endpoints: View3DEndpointDescriptor[]
+): View3DBounds | null {
+  const xValues: number[] = [];
+  const zValues: number[] = [];
+  const yValues: number[] = [0];
+
+  for (const duct of ducts) {
+    xValues.push(duct.start.x, duct.end.x);
+    zValues.push(duct.start.y, duct.end.y);
+    yValues.push(duct.start.z, duct.end.z);
   }
 
-  const xValues = nodes.map((node) => node.position.x);
-  const zValues = nodes.map((node) => node.position.y);
-  const yValues = nodes.map((node) => node.position.z);
+  for (const endpoint of endpoints) {
+    if (endpoint.geometry.type === "ahu") {
+      xValues.push(
+        endpoint.position.x - endpoint.geometry.widthMeters / 2 - AHU_COLLAR_LENGTH_METERS,
+        endpoint.position.x + endpoint.geometry.widthMeters / 2 + AHU_COLLAR_LENGTH_METERS
+      );
+      zValues.push(
+        endpoint.position.y - endpoint.geometry.depthMeters / 2 - AHU_COLLAR_LENGTH_METERS,
+        endpoint.position.y + endpoint.geometry.depthMeters / 2 + AHU_COLLAR_LENGTH_METERS
+      );
+      yValues.push(endpoint.geometry.heightMeters);
+
+      for (const port of endpoint.geometry.ports) {
+        xValues.push(port.anchorPosition.x);
+        zValues.push(port.anchorPosition.y);
+        yValues.push(port.anchorPosition.z);
+      }
+    } else {
+      const span = endpoint.geometry.markerSizeMeters;
+
+      xValues.push(endpoint.position.x - span, endpoint.position.x + span);
+      zValues.push(endpoint.position.y - span, endpoint.position.y + span);
+      yValues.push(DUCT_CENTERLINE_HEIGHT_METERS + TERMINAL_NECK_LENGTH_METERS + span * 0.95);
+    }
+  }
+
+  if (xValues.length === 0 || zValues.length === 0) {
+    return null;
+  }
 
   return {
     minX: Math.min(...xValues),
     maxX: Math.max(...xValues),
     minZ: Math.min(...zValues),
     maxZ: Math.max(...zValues),
-    maxY: Math.max(...yValues) + DUCT_CENTERLINE_HEIGHT_METERS + 1.2
+    maxY: Math.max(...yValues) + 1.2
   };
 }
 
@@ -489,11 +613,16 @@ function toWorldPoint(point: Point3D, elevationMeters: number): THREE.Vector3 {
   return new THREE.Vector3(point.x, point.z + elevationMeters, point.y);
 }
 
+function toWorldAbsolutePoint(point: Point3D): THREE.Vector3 {
+  return new THREE.Vector3(point.x, point.z, point.y);
+}
+
 function toWorldDirection(vector: Point3D): THREE.Vector3 {
   return new THREE.Vector3(vector.x, vector.z, vector.y).normalize();
 }
 
 interface ConnectedDuctDescriptor {
+  componentId: string;
   otherNodePosition: Point3D;
   diameterMeters: number;
 }
@@ -517,10 +646,12 @@ function createConnectedDuctsByNodeId(
     }
 
     addConnectedDuctDescriptor(connectedDuctsByNodeId, startNode.id, {
+      componentId: component.id,
       otherNodePosition: endNode.position,
       diameterMeters: component.geometry.diameterMm / 1000
     });
     addConnectedDuctDescriptor(connectedDuctsByNodeId, endNode.id, {
+      componentId: component.id,
       otherNodePosition: startNode.position,
       diameterMeters: component.geometry.diameterMm / 1000
     });
@@ -538,6 +669,198 @@ function addConnectedDuctDescriptor(
 
   connectedDucts.push(descriptor);
   connectedDuctsByNodeId.set(nodeId, connectedDucts);
+}
+
+function createAhuPortDescriptors(
+  component: AhuComponent,
+  node: DuctNode,
+  connectedDucts: ConnectedDuctDescriptor[],
+  connectedDuctSystemsById: Map<string, View3DAirSystem>,
+  criticalComponentIds: Set<string>
+): View3DAhuPortDescriptor[] {
+  const groupedDucts = new Map<View3DAirSystem, ConnectedDuctDescriptor[]>();
+
+  for (const connectedDuct of connectedDucts) {
+    const airSystem =
+      connectedDuctSystemsById.get(connectedDuct.componentId) ?? "mixed";
+    const systemDucts = groupedDucts.get(airSystem) ?? [];
+
+    systemDucts.push(connectedDuct);
+    groupedDucts.set(airSystem, systemDucts);
+  }
+
+  const ports: View3DAhuPortDescriptor[] = [];
+  const airSystems: View3DAirSystem[] = [
+    "outdoor",
+    "supply",
+    "extract",
+    "exhaust",
+    "mixed"
+  ];
+  const portElevation = calculateAhuPortElevation(component.geometry.heightMeters);
+
+  for (const airSystem of airSystems) {
+    const systemDucts = groupedDucts.get(airSystem) ?? [];
+    const offsets = createCenteredOffsets(
+      systemDucts.length,
+      AHU_PORT_SPACING_METERS
+    );
+
+    for (const [index, connectedDuct] of systemDucts.entries()) {
+      const faceDirection = resolveAhuFaceDirection(
+        airSystem,
+        node.position,
+        connectedDuct.otherNodePosition
+      );
+
+      ports.push({
+        id: `ahu-port:${component.id}:${connectedDuct.componentId}`,
+        connectedDuctId: connectedDuct.componentId,
+        airSystem,
+        direction: faceDirection,
+        anchorPosition: createAhuPortAnchorPosition(
+          node.position,
+          component.geometry,
+          faceDirection,
+          offsets[index] ?? 0,
+          portElevation
+        ),
+        diameterMeters: connectedDuct.diameterMeters,
+        isCritical: criticalComponentIds.has(connectedDuct.componentId)
+      });
+    }
+  }
+
+  return ports;
+}
+
+function createAhuPortAnchorPosition(
+  centerPosition: Point3D,
+  geometry: AhuComponent["geometry"],
+  direction: Point3D,
+  lateralOffsetMeters: number,
+  elevationMeters: number
+): Point3D {
+  if (Math.abs(direction.x) >= Math.abs(direction.y)) {
+    return {
+      x:
+        centerPosition.x +
+        Math.sign(direction.x || 1) *
+          (geometry.widthMeters / 2 + AHU_COLLAR_LENGTH_METERS),
+      y: centerPosition.y + lateralOffsetMeters,
+      z: elevationMeters
+    };
+  }
+
+  return {
+    x: centerPosition.x + lateralOffsetMeters,
+    y:
+      centerPosition.y +
+      Math.sign(direction.y || 1) *
+        (geometry.depthMeters / 2 + AHU_COLLAR_LENGTH_METERS),
+    z: elevationMeters
+  };
+}
+
+function resolveAhuFaceDirection(
+  airSystem: View3DAirSystem,
+  startPoint: Point3D,
+  endPoint: Point3D
+): Point3D {
+  switch (airSystem) {
+    case "supply":
+      return { x: 1, y: 0, z: 0 };
+    case "outdoor":
+      return { x: -1, y: 0, z: 0 };
+    case "extract":
+      return { x: 0, y: -1, z: 0 };
+    case "exhaust":
+      return { x: 0, y: 1, z: 0 };
+    case "mixed":
+      return snapPlanarDirectionToPrimaryAxis(
+        createNormalizedPlanarDirection(startPoint, endPoint)
+      );
+  }
+}
+
+function snapPlanarDirectionToPrimaryAxis(direction: Point3D | null): Point3D {
+  if (!direction) {
+    return { x: 1, y: 0, z: 0 };
+  }
+
+  if (Math.abs(direction.x) >= Math.abs(direction.y)) {
+    return { x: Math.sign(direction.x || 1), y: 0, z: 0 };
+  }
+
+  return { x: 0, y: Math.sign(direction.y || 1), z: 0 };
+}
+
+function calculateAhuPortElevation(heightMeters: number): number {
+  return Number(
+    Math.min(
+      Math.max(0.55, heightMeters * 0.62),
+      Math.max(0.75, heightMeters - 0.18)
+    ).toFixed(3)
+  );
+}
+
+function createCenteredOffsets(count: number, spacingMeters: number): number[] {
+  if (count <= 0) {
+    return [];
+  }
+
+  const firstOffset = (-spacingMeters * (count - 1)) / 2;
+
+  return Array.from({ length: count }, (_, index) =>
+    Number((firstOffset + index * spacingMeters).toFixed(3))
+  );
+}
+
+function createConnectedDuctSystemsById(
+  analysis: RouteAnalysisResult | null
+): Map<string, View3DAirSystem> {
+  const connectedDuctSystemsById = new Map<string, View3DAirSystem>();
+
+  if (!analysis) {
+    return connectedDuctSystemsById;
+  }
+
+  for (const route of analysis.routes) {
+    const firstInlineDuctId = route.componentBreakdown.find(
+      (component) => component.componentType === "ductSegment"
+    )?.componentId;
+
+    if (!firstInlineDuctId) {
+      continue;
+    }
+
+    const airSystem = mapTerminalTypeToAirSystem(route.terminalType);
+    const previousAirSystem = connectedDuctSystemsById.get(firstInlineDuctId);
+
+    connectedDuctSystemsById.set(
+      firstInlineDuctId,
+      previousAirSystem && previousAirSystem !== airSystem
+        ? "mixed"
+        : airSystem
+    );
+  }
+
+  return connectedDuctSystemsById;
+}
+
+function createDuctAnchorKey(componentId: string, nodeId: string): string {
+  return `${componentId}::${nodeId}`;
+}
+
+function createElevatedPlanarPoint(
+  position: Point3D,
+  elevationMeters: number
+): Point3D {
+  return {
+    x: position.x,
+    y: position.y,
+    z: elevationMeters
+  };
 }
 
 function resolveEndpointConnection(
@@ -637,4 +960,34 @@ function getTerminalColor(terminalType: TerminalDeviceType): string {
   }
 
   throw new Error(`Unsupported terminal type "${terminalType}".`);
+}
+
+function getAirSystemColor(airSystem: View3DAirSystem): string {
+  switch (airSystem) {
+    case "supply":
+      return "#2c819c";
+    case "extract":
+      return "#134c5e";
+    case "outdoor":
+      return "#4b9ac8";
+    case "exhaust":
+      return "#51717e";
+    case "mixed":
+      return "#7f98a2";
+  }
+}
+
+function mapTerminalTypeToAirSystem(
+  terminalType: TerminalDeviceType
+): View3DAirSystem {
+  switch (terminalType) {
+    case "supply":
+      return "supply";
+    case "exhaust":
+      return "extract";
+    case "outdoor":
+      return "outdoor";
+    case "exhaustAir":
+      return "exhaust";
+  }
 }

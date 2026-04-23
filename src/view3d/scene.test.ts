@@ -20,25 +20,34 @@ describe("buildView3DSceneData", () => {
 
     const graph = buildGraphFromEditorDocument(document);
     const analysis = analyzeDuctRoutes(graph);
-    const sceneData = buildView3DSceneData(document, analysis.criticalPath);
+    const sceneData = buildView3DSceneData(document, analysis);
+    const ahuEndpoint = sceneData.endpoints.find((item) => item.id === "ahu-2");
 
     expect(sceneData.ducts).toHaveLength(1);
     expect(sceneData.endpoints).toHaveLength(2);
-    expect(sceneData.bounds).toEqual({
-      minX: 1,
-      maxX: 4,
-      minZ: 2,
-      maxZ: 2,
-      maxY: 3
-    });
+    expect(ahuEndpoint).toEqual(
+      expect.objectContaining({
+        id: "ahu-2",
+        geometry: expect.objectContaining({
+          type: "ahu",
+          ports: [
+            expect.objectContaining({
+              airSystem: "supply",
+              connectedDuctId: "duct-5"
+            })
+          ]
+        })
+      })
+    );
+    expect(sceneData.bounds?.minX).toBeLessThanOrEqual(1);
+    expect(sceneData.bounds?.maxX).toBeGreaterThanOrEqual(4);
+    expect(sceneData.bounds?.minZ).toBeLessThanOrEqual(2);
+    expect(sceneData.bounds?.maxZ).toBeGreaterThanOrEqual(2);
+    expect(sceneData.bounds?.maxY).toBeGreaterThan(3);
     expect(sceneData.ducts[0]?.isCritical).toBe(true);
+    expect(sceneData.ducts[0]?.start.x).toBeGreaterThan(1);
     expect(sceneData.endpoints).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          id: "ahu-2",
-          connectionDirection: { x: 1, y: 0, z: 0 },
-          connectedDuctDiameterMeters: 0.25
-        }),
         expect.objectContaining({
           id: "terminal-4",
           connectionDirection: { x: -1, y: 0, z: 0 },
@@ -62,7 +71,7 @@ describe("buildView3DSceneData", () => {
 
     const graph = buildGraphFromEditorDocument(document);
     const analysis = analyzeDuctRoutes(graph);
-    const sceneData = buildView3DSceneData(document, analysis.criticalPath);
+    const sceneData = buildView3DSceneData(document, analysis);
     const criticalTerminal = sceneData.endpoints.find(
       (item) => item.type === "terminal" && item.isCritical
     );
@@ -72,5 +81,51 @@ describe("buildView3DSceneData", () => {
 
     expect(criticalTerminal?.id).toBe(analysis.criticalPath?.terminalId);
     expect(nonCriticalTerminal?.isCritical).toBe(false);
+  });
+
+  it("assigns AHU ports to supply, extract, outdoor air, and exhaust sides", () => {
+    let document = createInitialEditorDocument();
+
+    document = placeComponentAtPoint(document, "ahu", { x: 4, y: 4, z: 0 }).document;
+    document = placeComponentAtPoint(document, "supplyTerminal", { x: 8, y: 4, z: 0 }).document;
+    document = placeComponentAtPoint(document, "exhaustTerminal", { x: 4, y: 1, z: 0 }).document;
+    document = placeComponentAtPoint(document, "outdoorTerminal", { x: 1, y: 4, z: 0 }).document;
+    document = placeComponentAtPoint(document, "exhaustAirTerminal", { x: 4, y: 7, z: 0 }).document;
+
+    let draft = beginDuctDraft(document, { x: 4, y: 4, z: 0 });
+    document = completeDuctDraft(document, draft, { x: 8, y: 4, z: 0 }).document;
+    draft = beginDuctDraft(document, { x: 4, y: 4, z: 0 });
+    document = completeDuctDraft(document, draft, { x: 4, y: 1, z: 0 }).document;
+    draft = beginDuctDraft(document, { x: 4, y: 4, z: 0 });
+    document = completeDuctDraft(document, draft, { x: 1, y: 4, z: 0 }).document;
+    draft = beginDuctDraft(document, { x: 4, y: 4, z: 0 });
+    document = completeDuctDraft(document, draft, { x: 4, y: 7, z: 0 }).document;
+
+    const graph = buildGraphFromEditorDocument(document);
+    const analysis = analyzeDuctRoutes(graph);
+    const sceneData = buildView3DSceneData(document, analysis);
+    const ahuEndpoint = sceneData.endpoints.find(
+      (item) => item.id === "ahu-2" && item.geometry.type === "ahu"
+    );
+
+    expect(ahuEndpoint).toBeDefined();
+
+    if (!ahuEndpoint || ahuEndpoint.geometry.type !== "ahu") {
+      throw new Error("Expected AHU descriptor.");
+    }
+
+    const portsBySystem = new Map(
+      ahuEndpoint.geometry.ports.map((port) => [port.airSystem, port])
+    );
+
+    expect(portsBySystem.get("supply")?.direction).toEqual({ x: 1, y: 0, z: 0 });
+    expect(portsBySystem.get("outdoor")?.direction).toEqual({ x: -1, y: 0, z: 0 });
+    expect(portsBySystem.get("extract")?.direction).toEqual({ x: 0, y: -1, z: 0 });
+    expect(portsBySystem.get("exhaust")?.direction).toEqual({ x: 0, y: 1, z: 0 });
+    expect(
+      sceneData.ducts.filter(
+        (duct) => Math.abs(duct.start.x - 4) > 0.1 || Math.abs(duct.start.y - 4) > 0.1
+      )
+    ).toHaveLength(4);
   });
 });

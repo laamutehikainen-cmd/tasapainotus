@@ -24,6 +24,10 @@ interface SidebarProps {
   onNodeLabelChange: (value: string) => void;
   onComponentLabelChange: (value: string) => void;
   onAhuSystemTypeChange: (value: "supply" | "exhaust" | "mixed") => void;
+  onAhuDimensionChange: (
+    dimension: "widthMeters" | "depthMeters" | "heightMeters",
+    value: number
+  ) => void;
   onTerminalFlowRateChange: (value: number) => void;
   onTerminalTypeChange: (
     value: "supply" | "exhaust" | "outdoor" | "exhaustAir"
@@ -48,6 +52,7 @@ export function Sidebar({
   onNodeLabelChange,
   onComponentLabelChange,
   onAhuSystemTypeChange,
+  onAhuDimensionChange,
   onTerminalFlowRateChange,
   onTerminalTypeChange,
   onDuctDiameterChange,
@@ -82,7 +87,7 @@ export function Sidebar({
             </strong>
           </article>
           <article>
-            <span>Exhaust flow</span>
+            <span>Extract air flow</span>
             <strong>
               {analysis ? `${analysis.systems.exhaust.totalFlowRateLps.toFixed(0)} L/s` : "N/A"}
             </strong>
@@ -92,7 +97,7 @@ export function Sidebar({
             <strong>{formatPressure(analysis?.systems.fanPressure.supplyFanPressurePa)}</strong>
           </article>
           <article>
-            <span>Exhaust fan pressure</span>
+            <span>Extract fan pressure</span>
             <strong>{formatPressure(analysis?.systems.fanPressure.exhaustFanPressurePa)}</strong>
           </article>
           <article>
@@ -123,6 +128,7 @@ export function Sidebar({
         onNodeLabelChange={onNodeLabelChange}
         onComponentLabelChange={onComponentLabelChange}
         onAhuSystemTypeChange={onAhuSystemTypeChange}
+        onAhuDimensionChange={onAhuDimensionChange}
         onTerminalFlowRateChange={onTerminalFlowRateChange}
         onTerminalTypeChange={onTerminalTypeChange}
         onDuctDiameterChange={onDuctDiameterChange}
@@ -149,11 +155,11 @@ export function Sidebar({
                 </p>
               </article>
               <article className="critical-card">
-                <span>Exhaust fan</span>
+                <span>Extract fan</span>
                 <strong>{formatPressure(analysis.systems.fanPressure.exhaustFanPressurePa)}</strong>
                 <p>
-                  Hardest exhaust route {formatPressure(analysis.systems.exhaust.criticalPath?.totalPressureLossPa)}
-                  {" "}+ exhaust air path {formatPressure(analysis.systems.exhaustAir.criticalPath?.totalPressureLossPa)}
+                  Hardest extract route {formatPressure(analysis.systems.exhaust.criticalPath?.totalPressureLossPa)}
+                  {" "}+ exhaust path {formatPressure(analysis.systems.exhaustAir.criticalPath?.totalPressureLossPa)}
                 </p>
               </article>
             </div>
@@ -166,8 +172,8 @@ export function Sidebar({
               />
               <RouteSystemSection
                 summary={analysis.systems.exhaust}
-                title="Exhaust routes"
-                emptyMessage="Add connected exhaust terminals to inspect the exhaust-side critical path."
+                title="Extract air routes"
+                emptyMessage="Add connected extract air terminals to inspect the extract-side critical path."
               />
               <RouteSystemSection
                 summary={analysis.systems.outdoor}
@@ -176,8 +182,8 @@ export function Sidebar({
               />
               <RouteSystemSection
                 summary={analysis.systems.exhaustAir}
-                title="Exhaust air path"
-                emptyMessage="Exhaust air discharge paths appear here when an exhaust air terminal is connected."
+                title="Exhaust path"
+                emptyMessage="Exhaust discharge paths appear here when an exhaust terminal is connected."
               />
             </div>
           </>
@@ -201,9 +207,9 @@ export function Sidebar({
               emptyMessage="Supply branch comparisons appear when two or more supply routes split in parallel."
             />
             <BalancingSystemSection
-              title="Exhaust balancing"
               result={analysis.balancing.exhaust}
-              emptyMessage="Exhaust branch comparisons appear when two or more exhaust routes split in parallel."
+              title="Extract air balancing"
+              emptyMessage="Extract air branch comparisons appear when two or more extract air routes split in parallel."
             />
           </div>
         ) : (
@@ -383,11 +389,11 @@ function describeTerminalType(
     case "supply":
       return "Supply";
     case "exhaust":
-      return "Exhaust";
+      return "Extract air";
     case "outdoor":
       return "Outdoor air";
     case "exhaustAir":
-      return "Exhaust air";
+      return "Exhaust";
   }
 }
 

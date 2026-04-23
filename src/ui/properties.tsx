@@ -17,6 +17,10 @@ interface PropertiesProps {
   onNodeLabelChange: (value: string) => void;
   onComponentLabelChange: (value: string) => void;
   onAhuSystemTypeChange: (value: "supply" | "exhaust" | "mixed") => void;
+  onAhuDimensionChange: (
+    dimension: "widthMeters" | "depthMeters" | "heightMeters",
+    value: number
+  ) => void;
   onTerminalFlowRateChange: (value: number) => void;
   onTerminalTypeChange: (
     value: "supply" | "exhaust" | "outdoor" | "exhaustAir"
@@ -38,6 +42,7 @@ export function Properties({
   onNodeLabelChange,
   onComponentLabelChange,
   onAhuSystemTypeChange,
+  onAhuDimensionChange,
   onTerminalFlowRateChange,
   onTerminalTypeChange,
   onDuctDiameterChange,
@@ -160,10 +165,57 @@ export function Properties({
               }
             >
               <option value="supply">Supply</option>
-              <option value="exhaust">Exhaust</option>
+              <option value="exhaust">Extract air</option>
               <option value="mixed">Mixed</option>
             </select>
           </label>
+          <div className="property-metric-grid">
+            <label className="property-field">
+              <span>Length (m)</span>
+              <input
+                type="number"
+                min="0.2"
+                step="0.1"
+                value={selectedComponent.geometry.widthMeters}
+                onChange={(event) =>
+                  onAhuDimensionChange(
+                    "widthMeters",
+                    Number(event.target.value)
+                  )
+                }
+              />
+            </label>
+            <label className="property-field">
+              <span>Width (m)</span>
+              <input
+                type="number"
+                min="0.2"
+                step="0.1"
+                value={selectedComponent.geometry.depthMeters}
+                onChange={(event) =>
+                  onAhuDimensionChange(
+                    "depthMeters",
+                    Number(event.target.value)
+                  )
+                }
+              />
+            </label>
+            <label className="property-field">
+              <span>Height (m)</span>
+              <input
+                type="number"
+                min="0.2"
+                step="0.1"
+                value={selectedComponent.geometry.heightMeters}
+                onChange={(event) =>
+                  onAhuDimensionChange(
+                    "heightMeters",
+                    Number(event.target.value)
+                  )
+                }
+              />
+            </label>
+          </div>
         </div>
       ) : null}
 
@@ -192,9 +244,9 @@ export function Properties({
               }
             >
               <option value="supply">Supply</option>
-              <option value="exhaust">Exhaust</option>
-              <option value="outdoor">Outdoor</option>
-              <option value="exhaustAir">Exhaust air</option>
+              <option value="exhaust">Extract air</option>
+              <option value="outdoor">Outdoor air</option>
+              <option value="exhaustAir">Exhaust</option>
             </select>
           </label>
           {selectedComponent.metadata.terminalType === "supply" ||
@@ -224,7 +276,7 @@ export function Properties({
           ) : null}
           {selectedComponent.metadata.terminalType === "exhaustAir" ? (
             <p className="property-help">
-              Exhaust air flow follows the sum of all exhaust terminals.
+              Exhaust flow follows the sum of all extract air terminals.
             </p>
           ) : null}
         </div>

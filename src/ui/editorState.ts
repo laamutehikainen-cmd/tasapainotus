@@ -732,7 +732,7 @@ function createTerminalLabel(
     case "supply":
       return `Supply terminal ${index}`;
     case "exhaust":
-      return `Exhaust terminal ${index}`;
+      return `Extract air terminal ${index}`;
     case "outdoor":
       return `Outdoor terminal ${index}`;
     case "exhaustAir":

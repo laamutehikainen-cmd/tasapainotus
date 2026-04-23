@@ -364,6 +364,33 @@ function App() {
     );
   }
 
+  function handleAhuDimensionChange(
+    dimension: "widthMeters" | "depthMeters" | "heightMeters",
+    value: number
+  ): void {
+    if (
+      selectedComponent?.type !== "ahu" ||
+      !Number.isFinite(value) ||
+      value <= 0
+    ) {
+      return;
+    }
+
+    applyDocumentState(
+      updateComponentInDocument(document, selectedComponent.id, (component) =>
+        component.type === "ahu"
+          ? {
+              ...component,
+              geometry: {
+                ...component.geometry,
+                [dimension]: value
+              }
+            }
+          : component
+      )
+    );
+  }
+
   function handleTerminalFlowRateChange(value: number): void {
     if (selectedComponent?.type !== "terminal" || !Number.isFinite(value) || value <= 0) {
       return;
@@ -546,7 +573,7 @@ function App() {
           />
           <View3D
             document={deferredDocument}
-            criticalPath={routeAnalysis?.criticalPath ?? null}
+            analysis={routeAnalysis}
           />
         </div>
 
@@ -564,6 +591,7 @@ function App() {
         onNodeLabelChange={handleNodeLabelChange}
         onComponentLabelChange={handleComponentLabelChange}
           onAhuSystemTypeChange={handleAhuSystemTypeChange}
+          onAhuDimensionChange={handleAhuDimensionChange}
           onTerminalFlowRateChange={handleTerminalFlowRateChange}
         onTerminalTypeChange={handleTerminalTypeChange}
         selectedComponentResult={selectedComponentResult}
