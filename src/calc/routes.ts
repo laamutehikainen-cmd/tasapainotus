@@ -16,6 +16,11 @@ import {
   type BalancingAnalysisResult,
   type BalancingOptions
 } from "./balancing";
+import {
+  analyzeAutomaticRouteFittings,
+  createNodePairKey,
+  type AutomaticFittingResult
+} from "./fittings";
 
 export interface RouteComponentBreakdownItem {
   componentId: string;
@@ -32,6 +37,9 @@ export interface TerminalRouteResult {
   nodePath: string[];
   componentIds: string[];
   componentBreakdown: RouteComponentBreakdownItem[];
+  fittingBreakdown: AutomaticFittingResult[];
+  totalComponentPressureLossPa: number;
+  totalFittingPressureLossPa: number;
   totalPressureLossPa: number;
 }
 
@@ -80,6 +88,7 @@ export function analyzeDuctRoutes(
   const routeComponentIdLookup = createRouteComponentIdLookup(graph);
   const routes = graph.getTerminalPathsFromAhu().map((terminalPath) =>
     createTerminalRouteResult(
+      graph,
       terminalPath,
       ahu.id,
       terminalById,
@@ -100,6 +109,7 @@ export function analyzeDuctRoutes(
 }
 
 function createTerminalRouteResult(
+  graph: DuctNetworkGraph,
   terminalPath: TerminalPath,
   ahuId: string,
   terminalById: Map<string, TerminalDeviceComponent>,
@@ -127,6 +137,20 @@ function createTerminalRouteResult(
       result
     };
   });
+  const fittingBreakdown = analyzeAutomaticRouteFittings(
+    graph,
+    terminalPath.nodePath,
+    routeComponentIdLookup,
+    networkPerformance
+  );
+  const totalComponentPressureLossPa = componentBreakdown.reduce(
+    (sum, item) => sum + item.pressureLossPa,
+    0
+  );
+  const totalFittingPressureLossPa = fittingBreakdown.reduce(
+    (sum, fitting) => sum + fitting.pressureLossPa,
+    0
+  );
 
   return {
     terminalId: terminal.id,
@@ -136,10 +160,10 @@ function createTerminalRouteResult(
     nodePath: terminalPath.nodePath,
     componentIds,
     componentBreakdown,
-    totalPressureLossPa: componentBreakdown.reduce(
-      (sum, item) => sum + item.pressureLossPa,
-      0
-    )
+    fittingBreakdown,
+    totalComponentPressureLossPa,
+    totalFittingPressureLossPa,
+    totalPressureLossPa: totalComponentPressureLossPa + totalFittingPressureLossPa
   };
 }
 
@@ -240,9 +264,7 @@ function deriveInlineComponentIdsForPath(
   return componentIds;
 }
 
-function createRouteComponentIdLookup(
-  graph: DuctNetworkGraph
-): Map<string, string> {
+function createRouteComponentIdLookup(graph: DuctNetworkGraph): Map<string, string> {
   const lookup = new Map<string, string>();
 
   for (const edge of graph.getEdges()) {
@@ -253,8 +275,4 @@ function createRouteComponentIdLookup(
   }
 
   return lookup;
-}
-
-function createNodePairKey(nodeA: string, nodeB: string): string {
-  return [nodeA, nodeB].sort().join("::");
 }

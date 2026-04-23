@@ -1,6 +1,7 @@
 import { DuctNetworkGraph } from "../core/graph";
 import type { NodeId } from "../core/nodes";
 import type { TerminalDeviceType } from "../components";
+import type { AutomaticFittingResult } from "./fittings";
 
 export interface BalanceableRouteComponent {
   pressureLossPa: number;
@@ -13,6 +14,7 @@ export interface BalanceableRoute {
   nodePath: NodeId[];
   totalPressureLossPa: number;
   componentBreakdown: BalanceableRouteComponent[];
+  fittingBreakdown: AutomaticFittingResult[];
 }
 
 export interface BalancingOptions {
@@ -261,9 +263,14 @@ function calculateDownstreamPressureLoss(
   route: BalanceableRoute,
   startNodeIndex: number
 ): number {
-  return route.componentBreakdown
+  const downstreamComponentLossPa = route.componentBreakdown
     .slice(startNodeIndex + 1)
     .reduce((sum, component) => sum + component.pressureLossPa, 0);
+  const downstreamFittingLossPa = route.fittingBreakdown
+    .filter((fitting) => fitting.nodeIndex >= startNodeIndex)
+    .reduce((sum, fitting) => sum + fitting.pressureLossPa, 0);
+
+  return downstreamComponentLossPa + downstreamFittingLossPa;
 }
 
 function getOrCreateBranchContributions(

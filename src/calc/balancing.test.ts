@@ -14,19 +14,19 @@ describe("analyzeRouteBalancing", () => {
         nodeLabel: "Main branch junction",
         branchCount: 2,
         terminalCount: 2,
-        requiresBalancing: true,
+        requiresBalancing: false,
         imbalancePa: expect.closeTo(0.083737, 6),
         branches: [
           expect.objectContaining({
             branchNodeId: "node-room-b",
             branchLabel: "Room B diffuser",
-            downstreamPressureLossPa: expect.closeTo(2.009689, 6),
+            downstreamPressureLossPa: expect.closeTo(6.989828, 6),
             suggestedAdditionalLossPa: 0
           }),
           expect.objectContaining({
             branchNodeId: "node-room-a",
             branchLabel: "Room A diffuser",
-            downstreamPressureLossPa: expect.closeTo(1.925952, 6),
+            downstreamPressureLossPa: expect.closeTo(6.906091, 6),
             suggestedAdditionalLossPa: expect.closeTo(0.083737, 6)
           })
         ]

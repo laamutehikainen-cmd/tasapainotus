@@ -15,6 +15,11 @@ export {
   type FlowPropagationResult
 } from "./flowPropagation";
 export {
+  analyzeAutomaticRouteFittings,
+  type AutomaticFittingResult,
+  type AutomaticFittingType
+} from "./fittings";
+export {
   calculateHydraulicDiameter,
   type HydraulicDiameterInput
 } from "./hydraulicDiameter";

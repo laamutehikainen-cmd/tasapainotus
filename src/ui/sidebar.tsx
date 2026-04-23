@@ -241,8 +241,13 @@ function RouteSystemSection({
               <div className="route-meta-row">
                 <span className="route-type-chip">{describeTerminalType(route.terminalType)}</span>
                 <span>{route.nodePath.length - 1} duct segments</span>
+                <span>{route.fittingBreakdown.length} auto fittings</span>
                 <span>{route.designFlowRateLps.toFixed(0)} L/s</span>
               </div>
+              <span>
+                Components {route.totalComponentPressureLossPa.toFixed(2)} Pa + fittings{" "}
+                {route.totalFittingPressureLossPa.toFixed(2)} Pa
+              </span>
               {summary.criticalPath?.terminalId !== route.terminalId ? (
                 <span>
                   {(summary.criticalPath!.totalPressureLossPa - route.totalPressureLossPa).toFixed(2)}

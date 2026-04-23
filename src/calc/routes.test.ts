@@ -17,7 +17,9 @@ describe("analyzeDuctRoutes", () => {
         terminalType: "supply",
         nodePath: ["node-ahu", "node-main", "node-room-a"],
         componentIds: ["ahu-1", "duct-main", "duct-branch-a", "terminal-room-a"],
-        totalPressureLossPa: expect.closeTo(2.5238484296309914, 10)
+        totalComponentPressureLossPa: expect.closeTo(2.5238484296309914, 10),
+        totalFittingPressureLossPa: expect.closeTo(4.980138818388187, 10),
+        totalPressureLossPa: expect.closeTo(7.503987248019179, 10)
       }),
       expect.objectContaining({
         terminalId: "terminal-room-b",
@@ -25,14 +27,16 @@ describe("analyzeDuctRoutes", () => {
         terminalType: "supply",
         nodePath: ["node-ahu", "node-main", "node-room-b"],
         componentIds: ["ahu-1", "duct-main", "duct-branch-b", "terminal-room-b"],
-        totalPressureLossPa: expect.closeTo(2.607585465234198, 10)
+        totalComponentPressureLossPa: expect.closeTo(2.607585465234198, 10),
+        totalFittingPressureLossPa: expect.closeTo(4.980138818388187, 10),
+        totalPressureLossPa: expect.closeTo(7.587724283622385, 10)
       })
     ]);
 
     expect(analysis.criticalPath).toEqual(
       expect.objectContaining({
         terminalId: "terminal-room-b",
-        totalPressureLossPa: expect.closeTo(2.607585465234198, 10)
+        totalPressureLossPa: expect.closeTo(7.587724283622385, 10)
       })
     );
     expect(analysis.networkPerformance.systemFlowRateLps).toBe(400);
@@ -67,6 +71,16 @@ describe("analyzeDuctRoutes", () => {
         pressureLossPa: 0
       })
     ]);
+
+    expect(route.fittingBreakdown).toEqual([
+      expect.objectContaining({
+        fittingType: "tee",
+        nodeId: "node-main",
+        downstreamComponentId: "duct-branch-a",
+        lossCoefficient: 0.5,
+        pressureLossPa: expect.closeTo(4.980138818388187, 10)
+      })
+    ]);
   });
 
   it("builds separate supply and exhaust fan pressure summaries", () => {
@@ -82,6 +96,22 @@ describe("analyzeDuctRoutes", () => {
     expect(analysis.systems.exhaustAir.criticalPath?.terminalId).toBe("terminal-exhaust-air");
     expect(analysis.systems.fanPressure.supplyFanPressurePa).toBeCloseTo(5.549688, 6);
     expect(analysis.systems.fanPressure.exhaustFanPressurePa).toBeCloseTo(4.210511, 6);
+  });
+
+  it("adds an automatic elbow loss on a turning route with two connected ducts", () => {
+    const analysis = analyzeDuctRoutes(createElbowNetwork());
+    const route = analysis.routes[0];
+
+    expect(route.fittingBreakdown).toEqual([
+      expect.objectContaining({
+        fittingType: "elbow",
+        nodeId: "node-turn",
+        downstreamComponentId: "duct-outlet",
+        lossCoefficient: 0.5
+      })
+    ]);
+    expect(route.totalFittingPressureLossPa).toBeGreaterThan(0);
+    expect(route.totalPressureLossPa).toBeGreaterThan(route.totalComponentPressureLossPa);
   });
 });
 
@@ -208,6 +238,66 @@ function createAirHandlingLoopNetwork(): DuctNetworkGraph {
       terminalType: "exhaustAir",
       designFlowRateLps: 160,
       label: "Exhaust air"
+    })
+  );
+
+  return graph;
+}
+
+function createElbowNetwork(): DuctNetworkGraph {
+  const graph = new DuctNetworkGraph();
+
+  graph.addNode(
+    createNode({
+      id: "node-ahu",
+      kind: "endpoint",
+      position: { x: 0, y: 0, z: 0 }
+    })
+  );
+  graph.addNode(
+    createNode({
+      id: "node-turn",
+      position: { x: 2, y: 0, z: 0 }
+    })
+  );
+  graph.addNode(
+    createNode({
+      id: "node-terminal",
+      kind: "endpoint",
+      position: { x: 2, y: 2, z: 0 }
+    })
+  );
+
+  graph.addComponent(
+    createAhu({
+      id: "ahu-1",
+      nodeId: "node-ahu"
+    })
+  );
+  graph.addComponent(
+    createDuctSegment({
+      id: "duct-inlet",
+      startNodeId: "node-ahu",
+      endNodeId: "node-turn",
+      diameterMm: 250,
+      lengthMeters: 2
+    })
+  );
+  graph.addComponent(
+    createDuctSegment({
+      id: "duct-outlet",
+      startNodeId: "node-turn",
+      endNodeId: "node-terminal",
+      diameterMm: 250,
+      lengthMeters: 2
+    })
+  );
+  graph.addComponent(
+    createTerminalDevice({
+      id: "terminal-1",
+      nodeId: "node-terminal",
+      terminalType: "supply",
+      designFlowRateLps: 150
     })
   );
 
