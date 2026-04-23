@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { NetworkComponent } from "../components";
 import type { Point3D } from "../core/geometry";
 import type { DuctNode } from "../core/nodes";
@@ -62,6 +62,7 @@ export function Canvas2D({
   onCanvasPoint,
   onSelectionChange
 }: Canvas2DProps) {
+  const svgRef = useRef<SVGSVGElement | null>(null);
   const [zoom, setZoom] = useState(1);
   const [viewportOrigin, setViewportOrigin] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
@@ -72,6 +73,42 @@ export function Canvas2D({
   const viewBoxHeight =
     BASE_VIEWPORT_HEIGHT_METERS * (1 / zoom) * CANVAS_SCALE_PX_PER_METER +
     CANVAS_PADDING_PX * 2;
+
+  useEffect(() => {
+    const svg = svgRef.current;
+
+    if (!svg) {
+      return;
+    }
+
+    function handleNativeWheel(event: WheelEvent): void {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const nextZoom = clamp(
+        Number((zoom * (event.deltaY < 0 ? 1.12 : 1 / 1.12)).toFixed(4)),
+        MIN_ZOOM,
+        MAX_ZOOM
+      );
+      const nextViewBoxWidth =
+        BASE_VIEWPORT_WIDTH_METERS * (1 / nextZoom) * CANVAS_SCALE_PX_PER_METER +
+        CANVAS_PADDING_PX * 2;
+      const nextViewBoxHeight =
+        BASE_VIEWPORT_HEIGHT_METERS * (1 / nextZoom) * CANVAS_SCALE_PX_PER_METER +
+        CANVAS_PADDING_PX * 2;
+
+      setZoom(nextZoom);
+      setViewportOrigin((currentOrigin) =>
+        clampViewportOrigin(currentOrigin, nextViewBoxWidth, nextViewBoxHeight)
+      );
+    }
+
+    svg.addEventListener("wheel", handleNativeWheel, { passive: false });
+
+    return () => {
+      svg.removeEventListener("wheel", handleNativeWheel);
+    };
+  }, [zoom]);
 
   function handlePointerMove(event: React.PointerEvent<SVGSVGElement>): void {
     const panSession = panSessionRef.current;
@@ -187,27 +224,6 @@ export function Canvas2D({
     onHoverPointChange(null);
   }
 
-  function handleWheel(event: React.WheelEvent<SVGSVGElement>): void {
-    event.preventDefault();
-
-    const nextZoom = clamp(
-      Number((zoom * (event.deltaY < 0 ? 1.12 : 1 / 1.12)).toFixed(4)),
-      MIN_ZOOM,
-      MAX_ZOOM
-    );
-    const nextViewBoxWidth =
-      BASE_VIEWPORT_WIDTH_METERS * (1 / nextZoom) * CANVAS_SCALE_PX_PER_METER +
-      CANVAS_PADDING_PX * 2;
-    const nextViewBoxHeight =
-      BASE_VIEWPORT_HEIGHT_METERS * (1 / nextZoom) * CANVAS_SCALE_PX_PER_METER +
-      CANVAS_PADDING_PX * 2;
-
-    setZoom(nextZoom);
-    setViewportOrigin((currentOrigin) =>
-      clampViewportOrigin(currentOrigin, nextViewBoxWidth, nextViewBoxHeight)
-    );
-  }
-
   function handleAnchoredPointerDown(
     event: React.PointerEvent<SVGGElement | SVGCircleElement>,
     point: Point3D,
@@ -242,6 +258,7 @@ export function Canvas2D({
       </div>
 
       <svg
+        ref={svgRef}
         className={isPanning ? "editor-canvas is-panning" : "editor-canvas"}
         role="img"
         aria-label="Duct network editor canvas"
@@ -252,7 +269,6 @@ export function Canvas2D({
         onPointerDown={handleCanvasPointerDown}
         onPointerUp={handleCanvasPointerUp}
         onPointerCancel={handleCanvasPointerCancel}
-        onWheel={handleWheel}
       >
         <rect
           x="0"

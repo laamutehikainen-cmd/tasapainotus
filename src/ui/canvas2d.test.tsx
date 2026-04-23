@@ -1,4 +1,4 @@
-import { fireEvent, render } from "@testing-library/react";
+import { act, fireEvent, render } from "@testing-library/react";
 import {
   beginDuctDraft,
   completeDuctDraft,
@@ -92,6 +92,42 @@ describe("Canvas2D", () => {
       kind: "node",
       id: "node-5"
     });
+  });
+
+  it("captures wheel zoom inside the canvas without leaking page scroll", () => {
+    const document = createDocumentWithEndpointAndJunction();
+    const { container, getByText } = render(
+      <Canvas2D
+        document={document}
+        activeTool="select"
+        selection={null}
+        ductDraft={null}
+        hoverPoint={null}
+        onHoverPointChange={() => {}}
+        onCanvasPoint={() => {}}
+        onSelectionChange={() => {}}
+      />
+    );
+
+    const svg = container.querySelector("svg");
+
+    expect(svg).not.toBeNull();
+    expect(getByText("Zoom: 100%")).toBeInTheDocument();
+
+    const wheelEvent = new WheelEvent("wheel", {
+      deltaY: 120,
+      bubbles: true,
+      cancelable: true
+    });
+    let wasCancelled = false;
+
+    act(() => {
+      wasCancelled = !svg!.dispatchEvent(wheelEvent);
+    });
+
+    expect(wasCancelled).toBe(true);
+    expect(wheelEvent.defaultPrevented).toBe(true);
+    expect(getByText("Zoom: 89%")).toBeInTheDocument();
   });
 });
 

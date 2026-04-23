@@ -206,6 +206,7 @@ body {
 
 .editor-stage {
   padding: 1rem;
+  overscroll-behavior: contain;
 }
 
 .viewer-stage {
@@ -239,6 +240,7 @@ body {
   min-height: 760px;
   overflow: hidden;
   cursor: grab;
+  overscroll-behavior: contain;
 }
 
 .editor-canvas.is-panning {
