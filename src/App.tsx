@@ -113,6 +113,15 @@ function App() {
         return;
       }
 
+      if (event.key === "Escape") {
+        if (activeTool !== "select" || ductDraft !== null) {
+          event.preventDefault();
+          activateSelectTool("Select tool active.");
+        }
+
+        return;
+      }
+
       if (event.key !== "Delete" && event.key !== "Backspace") {
         return;
       }
@@ -155,16 +164,18 @@ function App() {
   }
 
   function handleToolChange(tool: ToolMode): void {
-    setActiveTool(tool);
+    if (tool === "select") {
+      activateSelectTool("Selection updates the properties panel and analysis sidebar.");
 
-    if (tool !== "duct") {
-      setDuctDraft(null);
+      return;
     }
 
+    setActiveTool(tool);
+    setDuctDraft(null);
     setNotice(
       tool === "duct"
         ? "Click one snapped point to start a duct, then click another to finish it. The duct tool stays active for the next segment."
-        : "Selection updates the properties panel and analysis sidebar."
+        : "Placement tool active. Press Esc to return to Select."
     );
   }
 
@@ -220,6 +231,12 @@ function App() {
   function handleCancelDuctDraft(): void {
     setDuctDraft(null);
     setNotice("Duct draft cancelled.");
+  }
+
+  function activateSelectTool(nextNotice: string): void {
+    setActiveTool("select");
+    setDuctDraft(null);
+    setNotice(nextNotice);
   }
 
   function handleUndo(): void {
