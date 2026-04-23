@@ -52,6 +52,8 @@ interface Canvas2DProps {
   onSelectionChange: (selection: EditorSelection) => void;
 }
 
+type CanvasPointerEvent = React.PointerEvent<SVGElement>;
+
 export function Canvas2D({
   document,
   activeTool,
@@ -240,6 +242,21 @@ export function Canvas2D({
     onCanvasPoint(point);
   }
 
+  function handleDuctPointerDown(
+    event: React.PointerEvent<SVGLineElement>,
+    nextSelection: EditorSelection
+  ): void {
+    event.stopPropagation();
+
+    if (activeTool === "select") {
+      onSelectionChange(nextSelection);
+
+      return;
+    }
+
+    onCanvasPoint(getCanvasPointFromEvent(event));
+  }
+
   return (
     <section className="editor-stage" aria-label="2D editor">
       <div className="editor-stage-header">
@@ -368,13 +385,12 @@ export function Canvas2D({
                     x2={end.x}
                     y2={end.y}
                     className="duct-hit-area"
-                    onPointerDown={(event) => {
-                      event.stopPropagation();
-                      onSelectionChange({
+                    onPointerDown={(event) =>
+                      handleDuctPointerDown(event, {
                         kind: "component",
                         id: component.id
-                      });
-                    }}
+                      })
+                    }
                   />
                   <text
                     x={(start.x + end.x) / 2}
@@ -566,9 +582,7 @@ function renderEndpointSymbol(
   }
 }
 
-function getCanvasPointFromEvent(
-  event: React.PointerEvent<SVGSVGElement>
-): Point3D {
+function getCanvasPointFromEvent(event: CanvasPointerEvent): Point3D {
   const svgPoint = getSvgPointFromEvent(event);
   const svgX = svgPoint.x;
   const svgY = svgPoint.y;
@@ -591,10 +605,19 @@ function getCanvasPointFromEvent(
   };
 }
 
-function getSvgPointFromEvent(
-  event: React.PointerEvent<SVGSVGElement>
-): { x: number; y: number } {
-  const svg = event.currentTarget;
+function getSvgPointFromEvent(event: CanvasPointerEvent): { x: number; y: number } {
+  const svg =
+    event.currentTarget instanceof SVGSVGElement
+      ? event.currentTarget
+      : event.currentTarget.ownerSVGElement;
+
+  if (!svg) {
+    return {
+      x: 0,
+      y: 0
+    };
+  }
+
   const screenPoint = new DOMPoint(event.clientX, event.clientY);
   const screenToSvgMatrix = svg.getScreenCTM()?.inverse();
 

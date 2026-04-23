@@ -9,6 +9,32 @@ import {
 import { Canvas2D } from "./canvas2d";
 
 describe("Canvas2D", () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      "DOMPoint",
+      class {
+        constructor(
+          public x: number,
+          public y: number
+        ) {}
+
+        matrixTransform() {
+          return {
+            x: this.x,
+            y: this.y
+          };
+        }
+      }
+    );
+
+    Object.defineProperty(SVGSVGElement.prototype, "getScreenCTM", {
+      configurable: true,
+      value: () => ({
+        inverse: () => ({})
+      })
+    });
+  });
+
   it("starts duct drawing from an existing endpoint instead of only selecting it", () => {
     const document = createDocumentWithEndpointAndJunction();
     const onCanvasPoint = vi.fn();
@@ -128,6 +154,34 @@ describe("Canvas2D", () => {
     expect(wasCancelled).toBe(true);
     expect(wheelEvent.defaultPrevented).toBe(true);
     expect(getByText("Zoom: 89%")).toBeInTheDocument();
+  });
+
+  it("allows the duct tool to snap into the middle of an existing duct", () => {
+    const document = createDocumentWithEndpointAndJunction();
+    const onCanvasPoint = vi.fn();
+    const { container } = render(
+      <Canvas2D
+        document={document}
+        activeTool="duct"
+        selection={null}
+        ductDraft={null}
+        hoverPoint={null}
+        onHoverPointChange={() => {}}
+        onCanvasPoint={onCanvasPoint}
+        onSelectionChange={() => {}}
+      />
+    );
+
+    const ductHitArea = container.querySelector(".duct-hit-area");
+
+    expect(ductHitArea).not.toBeNull();
+
+    fireEvent.pointerDown(ductHitArea!, {
+      clientX: 320,
+      clientY: 228
+    });
+
+    expect(onCanvasPoint).toHaveBeenCalledWith({ x: 3, y: 2, z: 0 });
   });
 });
 

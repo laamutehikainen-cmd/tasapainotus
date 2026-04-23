@@ -2,6 +2,7 @@ import {
   createAhu,
   createDuctSegment,
   createTerminalDevice,
+  type DuctSegmentComponent,
   type NetworkComponent,
   type TerminalDeviceComponent
 } from "../components";
@@ -100,14 +101,14 @@ export function completeDuctDraft(
   }
 
   let workingDocument = document;
-  const startNodeResult = ensureNodeAtPosition(
+  const startNodeResult = ensureConnectionNodeAtPosition(
     workingDocument,
     draft.startPosition,
     draft.startNodeId
   );
   workingDocument = startNodeResult.document;
 
-  const endNodeResult = ensureNodeAtPosition(
+  const endNodeResult = ensureConnectionNodeAtPosition(
     workingDocument,
     snappedEndPosition,
     null
@@ -254,7 +255,7 @@ function placeAhuAtPoint(
   }
 
   const snappedPosition = snapPointToGrid(position);
-  const nodeResult = ensureNodeAtPosition(document, snappedPosition, null);
+  const nodeResult = ensureConnectionNodeAtPosition(document, snappedPosition, null);
   ensureNoEndpointComponentAtNode(nodeResult.document, nodeResult.nodeId);
 
   const componentId = createId(nodeResult.document, "ahu");
@@ -286,7 +287,7 @@ function placeTerminalAtPoint(
   terminalType: "supply" | "exhaust" | "outdoor" | "exhaustAir"
 ): EditorMutationResult {
   const snappedPosition = snapPointToGrid(position);
-  const nodeResult = ensureNodeAtPosition(document, snappedPosition, null);
+  const nodeResult = ensureConnectionNodeAtPosition(document, snappedPosition, null);
   ensureNoEndpointComponentAtNode(nodeResult.document, nodeResult.nodeId);
 
   const componentId = createId(nodeResult.document, "terminal");
@@ -314,7 +315,7 @@ function placeTerminalAtPoint(
   };
 }
 
-function ensureNodeAtPosition(
+function ensureConnectionNodeAtPosition(
   document: EditorDocument,
   position: Point3D,
   preferredNodeId: string | null
@@ -338,6 +339,16 @@ function ensureNodeAtPosition(
     };
   }
 
+  const overlappingDuctSegments = findDuctSegmentsAtPosition(document, position);
+
+  if (overlappingDuctSegments.length > 0) {
+    return insertConnectionNodeIntoSegments(
+      document,
+      position,
+      overlappingDuctSegments
+    );
+  }
+
   const nodeId = createId(document, "node");
 
   return {
@@ -359,6 +370,45 @@ function ensureNodeAtPosition(
   };
 }
 
+function insertConnectionNodeIntoSegments(
+  document: EditorDocument,
+  position: Point3D,
+  segments: DuctSegmentComponent[]
+): {
+  document: EditorDocument;
+  nodeId: string;
+} {
+  const nodeId = createId(document, "node");
+  let workingDocument: EditorDocument = {
+    ...document,
+    nextSequence: document.nextSequence + 1,
+    nodes: [
+      ...document.nodes,
+      createNode({
+        id: nodeId,
+        position: clonePoint3D(position),
+        metadata: {
+          label: `Node ${document.nextSequence}`
+        }
+      })
+    ]
+  };
+
+  for (const segment of segments) {
+    workingDocument = splitDuctSegmentAtNode(
+      workingDocument,
+      segment,
+      nodeId,
+      position
+    );
+  }
+
+  return {
+    document: workingDocument,
+    nodeId
+  };
+}
+
 function findNodeAtPosition(
   document: EditorDocument,
   position: Point3D
@@ -370,6 +420,129 @@ function findNodeAtPosition(
       (node) => createPointKey(snapPointToGrid(node.position)) === targetKey
     ) ?? null
   );
+}
+
+function findDuctSegmentsAtPosition(
+  document: EditorDocument,
+  position: Point3D
+): DuctSegmentComponent[] {
+  return document.components.filter(
+    (component): component is DuctSegmentComponent =>
+      component.type === "ductSegment" &&
+      isPointOnDuctSegmentInterior(document, component, position)
+  );
+}
+
+function isPointOnDuctSegmentInterior(
+  document: EditorDocument,
+  segment: DuctSegmentComponent,
+  position: Point3D
+): boolean {
+  const startNode = findNodeById(document, segment.nodeIds[0]);
+  const endNode = findNodeById(document, segment.nodeIds[1]);
+
+  if (!startNode || !endNode) {
+    return false;
+  }
+
+  if (
+    createPointKey(startNode.position) === createPointKey(position) ||
+    createPointKey(endNode.position) === createPointKey(position)
+  ) {
+    return false;
+  }
+
+  const segmentDx = endNode.position.x - startNode.position.x;
+  const segmentDy = endNode.position.y - startNode.position.y;
+  const pointDx = position.x - startNode.position.x;
+  const pointDy = position.y - startNode.position.y;
+  const crossProduct = segmentDx * pointDy - segmentDy * pointDx;
+  const tolerance = 1e-6;
+
+  if (Math.abs(crossProduct) > tolerance) {
+    return false;
+  }
+
+  const dotProduct = pointDx * segmentDx + pointDy * segmentDy;
+  const segmentLengthSquared = segmentDx * segmentDx + segmentDy * segmentDy;
+
+  return (
+    dotProduct > tolerance && dotProduct < segmentLengthSquared - tolerance
+  );
+}
+
+function splitDuctSegmentAtNode(
+  document: EditorDocument,
+  segment: DuctSegmentComponent,
+  nodeId: string,
+  nodePosition: Point3D
+): EditorDocument {
+  const startNode = findNodeById(document, segment.nodeIds[0]);
+  const endNode = findNodeById(document, segment.nodeIds[1]);
+
+  if (!startNode || !endNode) {
+    return document;
+  }
+
+  const firstSegmentId = createId(document, "duct");
+  const secondSegmentId = `duct-${document.nextSequence + 1}`;
+  const derivedSegments: DuctSegmentComponent[] = [
+    createDerivedDuctSegment(
+      segment,
+      firstSegmentId,
+      startNode.id,
+      nodeId,
+      startNode.position,
+      nodePosition,
+      "A",
+      document.nextSequence
+    ),
+    createDerivedDuctSegment(
+      segment,
+      secondSegmentId,
+      nodeId,
+      endNode.id,
+      nodePosition,
+      endNode.position,
+      "B",
+      document.nextSequence + 1
+    )
+  ];
+
+  return {
+    ...document,
+    nextSequence: document.nextSequence + 2,
+    components: [
+      ...document.components.filter((component) => component.id !== segment.id),
+      ...derivedSegments
+    ]
+  };
+}
+
+function createDerivedDuctSegment(
+  sourceSegment: DuctSegmentComponent,
+  id: string,
+  startNodeId: string,
+  endNodeId: string,
+  startPosition: Point3D,
+  endPosition: Point3D,
+  splitSuffix: "A" | "B",
+  fallbackSequence: number
+): DuctSegmentComponent {
+  return createDuctSegment({
+    id,
+    startNodeId,
+    endNodeId,
+    diameterMm: sourceSegment.geometry.diameterMm,
+    lengthMeters: calculatePlanarDistanceMeters(startPosition, endPosition),
+    designFlowRateLps: sourceSegment.flow.designFlowRateLps ?? undefined,
+    material: sourceSegment.metadata.material,
+    roughnessMm: sourceSegment.metadata.roughnessMm,
+    localLossCoefficient: sourceSegment.metadata.localLossCoefficient,
+    label: sourceSegment.metadata.label
+      ? `${sourceSegment.metadata.label} ${splitSuffix}`
+      : `Duct ${fallbackSequence}`
+  });
 }
 
 function ensureNoEndpointComponentAtNode(

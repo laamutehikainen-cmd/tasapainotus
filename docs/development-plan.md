@@ -1,100 +1,147 @@
-# HVAC Duct Design Tool – Development Plan
+# HVAC Duct Design Tool - Development Plan
 
 ## 1. Purpose
 
-The goal is to build a **browser-based HVAC duct design and analysis tool** that allows fast drawing of duct networks and supports:
+The goal is to build a browser-based HVAC duct design and analysis tool that acts as a simple "Magicad for teaching".
 
-* Placement of main components (AHU, terminals)
-* Fast duct routing with snapping
-* Standard duct sizes and fittings
-* Pressure loss calculation (Darcy–Weisbach)
-* Friction factor using Swamee–Jain
-* Identification of the **critical (most demanding) path**
-* Support for duct system balancing
+The tool must help users:
+
+* draw duct networks quickly
+* understand airflow, pressure loss, critical paths, and balancing
+* visualize what changes when duct sizes, branches, and resistances change
+* demonstrate HVAC system behavior clearly to students
 
 The focus is on:
 
-* **speed of use**
-* **clarity of results**
-* **engineering correctness**
+* speed of use
+* clarity of results
+* engineering correctness
+* teaching value over CAD complexity
 
 ---
 
-## 2. Scope (Version 1)
+## 2. Current Product Scope
 
-### Included in V1
+### Implemented Foundation
 
-* Browser-based application (no installation required)
+The current foundation already includes:
+
+* browser-based application
 * 2D drawing with mouse
-* Grid snapping (10 cm)
-* Basic 3D visualization (read-only)
-* Air Handling Unit (AHU) as main component
-* Terminal devices (supply, exhaust, outdoor, exhaust air)
-* Round duct sizes (standardized)
-* Basic fittings:
+* 10 cm snapping
+* read-only 3D visualization
+* AHU placement
+* terminal placement
+* round standard duct sizes
+* pressure loss calculation:
+  * Darcy-Weisbach
+  * Swamee-Jain friction factor
+  * local losses using zeta-values
+* route detection
+* critical path identification
+* balancing-oriented comparison
+* GitHub Pages deployment
 
-  * straight duct
-  * elbow
-  * tee
-  * reducer (optional in v1 if needed)
-* Flow distribution from terminals to AHU
-* Pressure loss calculations:
+### Current System Terms
 
-  * Darcy–Weisbach
-  * Swamee–Jain friction factor
-  * Local losses using ζ-values (k-values)
-* Route detection:
+Use these names consistently in UI, code, and documentation:
 
-  * all paths from AHU to terminals
-  * identification of **critical path**
-* Display of results per:
+* Supply
+* Extract air
+* Outdoor air
+* Exhaust
 
-  * component
-  * route
+Meaning:
 
----
-
-### Not included in V1
-
-* IFC/BIM export
-* Full 3D editing
-* Manufacturer databases
-* Automatic optimization algorithms
-* Advanced rectangular duct systems (optional later)
-* Collision detection
-* Multi-floor advanced logic (basic Z allowed later)
+* Supply = air delivered to rooms
+* Extract air = air removed from rooms
+* Outdoor air = incoming fresh air path
+* Exhaust = discharge air path to outside
 
 ---
 
-## 3. Core Design Principles
+## 3. Next Development Version
 
-1. The system is **not a drawing tool**, but a **network editor**
-2. All geometry must map to a **valid duct network graph**
-3. Each component must:
+The next version should improve the tool specifically for teaching and fast network editing.
 
-   * connect to nodes
-   * contain engineering data
-4. Calculation must be:
+### Main Goals
 
-   * transparent
-   * reproducible
-5. UI must support **fast workflow over precision modeling**
+* make drawing feel faster and more natural
+* make branch creation and network editing automatic where reasonable
+* make local losses visible, explainable, and editable
+* make AHU geometry more realistic
+* improve terminology and system clarity
+* add teaching-oriented visualization and optional animation
+
+### Included In The Next Version
+
+* duct drawing remains active until the user changes tool or cancels
+* automatic duct-to-duct connection with node creation
+* automatic splitting of an existing duct when another duct connects to it
+* automatic local loss generation for elbows and tee junctions
+* user-editable zeta-values for automatically generated fittings
+* AHU dimension input:
+  * length
+  * width
+  * height
+* clearer 2D symbols and clearer teaching-oriented route display
+* optional teaching mode
+* optional animated flow visualization
+* better validation and user warnings
+
+### Still Not In Scope
+
+* IFC or BIM export
+* manufacturer-specific product databases
+* full 3D editing
+* advanced collision detection
+* full rectangular duct workflow
+* advanced multi-floor editing
+* automatic optimization algorithms
 
 ---
 
-## 4. System Architecture
+## 4. Core Design Principles
 
-### 4.1 Core Layers
-
-* **Data Model (core)**
-* **Calculation Engine**
-* **Geometry / Drawing**
-* **UI**
-* **Visualization (3D)**
+1. The system is not a generic drawing tool. It is a network editor.
+2. All geometry must map to a valid duct network graph.
+3. Components must always connect through nodes.
+4. Calculation must remain transparent and reproducible.
+5. UI must support fast workflow over precision modeling.
+6. Teaching clarity is more important than CAD completeness.
+7. Automatically generated fittings must still remain inspectable and editable by the user.
 
 ---
 
-### 4.2 Folder Structure
+## 5. System Architecture
+
+### 5.1 Core Layers
+
+* Data Model
+* Calculation Engine
+* Geometry And Drawing
+* UI
+* Visualization
+* Teaching Layer
+
+### 5.2 Modeling Strategy For Fittings And Local Losses
+
+Local losses should not live directly on a bare node.
+
+Recommended approach:
+
+* Node remains a graph connection point
+* Elbow and tee losses are represented as fitting objects attached to a node
+* Fittings may be auto-generated from geometry and topology
+* Users may override the default zeta-value
+
+This keeps:
+
+* the graph model clean
+* the calculations explainable
+* the UI editable for teaching use
+
+### 5.3 Suggested Folder Growth
 
 ```text
 src/
@@ -104,6 +151,7 @@ src/
     edges.ts
     snapping.ts
     geometry.ts
+    fittingDetection.ts
   components/
     ahu.ts
     duct.ts
@@ -118,260 +166,267 @@ src/
     localLoss.ts
     routes.ts
     balancing.ts
+    fittings.ts
   data/
-    ductSizes.json
-    terminals.json
-    fittings.json
+    ductSizes.ts
+    fittings.ts
   ui/
-    canvas2d.ts
-    controls.ts
-    sidebar.ts
-    properties.ts
+    canvas2d.tsx
+    controls.tsx
+    sidebar.tsx
+    properties.tsx
+    teachingMode.tsx
   view3d/
     scene.ts
     renderer.ts
     camera.ts
+    animation.ts
 ```
-
----
-
-## 5. Development Phases
-
----
-
-### Phase 1 – Project Setup
-
-**Goal:** Create working development environment
-
-Tasks:
-
-* Initialize repository
-* Setup TypeScript project
-* Setup basic React UI
-* Add testing framework (Vitest or Jest)
-* Create folder structure
-* Add base documentation
-
-Acceptance Criteria:
-
-* Project runs locally
-* Tests can be executed
-* Basic UI renders
-
----
-
-### Phase 2 – Core Data Model
-
-**Goal:** Create duct network structure
-
-Tasks:
-
-* Define Node
-* Define Edge
-* Define Component base type
-* Implement:
-
-  * AHU
-  * DuctSegment
-  * TerminalDevice
-* Implement connection logic
-* Ensure valid graph structure
-
-Acceptance Criteria:
-
-* Can create a small duct network in code
-* Components connect correctly
-* Graph is traversable
-
----
-
-### Phase 3 – Calculation Engine
-
-**Goal:** Implement all engineering calculations
-
-Tasks:
-
-* Reynolds number
-* Swamee–Jain friction factor
-* Darcy–Weisbach pressure loss
-* Hydraulic diameter
-* Local losses (ζ)
-* Flow propagation from terminals
-
-Acceptance Criteria:
-
-* Unit tests validate formulas
-* Results match reference calculations
-* Each component returns:
-
-  * pressure loss
-  * velocity
-  * Reynolds
-
----
-
-### Phase 4 – Route Analysis
-
-**Goal:** Identify system behavior
-
-Tasks:
-
-* Traverse all paths from AHU to terminals
-* Calculate total pressure loss per route
-* Identify critical path
-* Return detailed breakdown
-
-Acceptance Criteria:
-
-* Correct path detection in branched network
-* Correct identification of worst-case path
-
----
-
-### Phase 5 – 2D Drawing System
-
-**Goal:** Enable fast user input
-
-Tasks:
-
-* Implement SVG or Canvas-based editor
-* Grid (10 cm)
-* Snap-to-grid
-* Mouse-based drawing:
-
-  * straight ducts
-  * auto node creation
-* Component placement:
-
-  * AHU
-  * terminals
-* Selection and deletion tools
-
-Acceptance Criteria:
-
-* User can draw network quickly
-* Snap works consistently
-* Geometry matches data model
-
----
-
-### Phase 6 – 3D Visualization
-
-**Goal:** Visual feedback
-
-Tasks:
-
-* Render ducts using Three.js
-* Render AHU as box
-* Render terminals as markers
-* Add orbit camera
-* Sync with 2D model
-
-Acceptance Criteria:
-
-* 3D updates when model changes
-* No editing in 3D (view only)
-
----
-
-### Phase 7 – Balancing Support
-
-**Goal:** Support engineering workflow
-
-Tasks:
-
-* Compare parallel branches
-* Show pressure differences
-* Highlight imbalance
-* Suggest balancing need
-
-Acceptance Criteria:
-
-* User can identify imbalance visually
-* Critical path clearly highlighted
 
 ---
 
 ## 6. Data Definitions
 
-Each component must include:
+Each physical component must include:
 
 * id
 * type
 * connected nodes
 * geometry data
 * flow data
-* pressure loss
-* metadata (e.g. size, k-value)
+* pressure loss data
+* metadata
+
+Each auto-generated fitting should include:
+
+* id
+* type
+* node id
+* connected segment ids
+* zeta
+* isAutoGenerated
+* manualOverride
+* flowBasis
+* pressureLoss
+
+Each AHU should include editable geometry:
+
+* length
+* width
+* height
 
 ---
 
-## 7. Calculation Formulas
+## 7. Engineering Rules
 
-### Reynolds Number
+### Core Formulas
 
-Re = (ρ * v * D) / μ
+#### Reynolds Number
 
-### Swamee–Jain
+Re = (rho * v * D) / mu
 
-f = 0.25 / [log10( (ε / 3.7D) + (5.74 / Re^0.9) )]^2
+#### Swamee-Jain
 
-### Darcy–Weisbach
+f = 0.25 / [log10((epsilon / 3.7D) + (5.74 / Re^0.9))]^2
 
-Δp = f * (L / D) * (ρ * v² / 2)
+#### Darcy-Weisbach
 
-### Local Loss
+delta_p = f * (L / D) * (rho * v^2 / 2)
 
-Δp = ζ * (ρ * v² / 2)
+#### Local Loss
+
+delta_p = zeta * (rho * v^2 / 2)
+
+### Default Local Loss Rules For The Next Version
+
+* elbow default zeta = 0.5
+* tee default zeta = 0.5
+* tee downstream local loss is calculated from the downstream branch flow after the tee
+* the user must be able to override default zeta-values
+
+### System Logic Rules
+
+* Outdoor air flow follows the total required supply flow
+* Exhaust flow follows the total required extract air flow
+* Outdoor air and exhaust routes are included in fan pressure requirements
+* Outdoor air and exhaust routes are not part of branch balancing
+* Supply and extract air balancing are handled separately
 
 ---
 
-## 8. Development Rules (IMPORTANT)
+## 8. Development Phases Already Completed
+
+### Phase 1 - Project Setup
+
+Completed foundation for React, TypeScript, Vite, tests, and documentation.
+
+### Phase 2 - Core Data Model
+
+Completed graph-based duct network model with nodes, components, and connectivity.
+
+### Phase 3 - Calculation Engine
+
+Completed core engineering calculations for friction, Reynolds number, and pressure loss.
+
+### Phase 4 - Route Analysis
+
+Completed route traversal, route breakdown, and critical path identification.
+
+### Phase 5 - 2D Drawing System
+
+Completed snap-based network editing foundation.
+
+### Phase 6 - 3D Visualization
+
+Completed read-only synchronized 3D view.
+
+### Phase 7 - Balancing Support
+
+Completed basic balancing-oriented comparison and fan pressure presentation.
+
+---
+
+## 9. Next Development Phases
+
+### Phase 8 - Editing Workflow Improvements
+
+Goal:
+Make the editor feel fast and natural for repeated teaching use.
+
+Tasks:
+
+* keep duct drawing active until tool change or cancel
+* allow fast repeated duct placement without reselecting the tool
+* connect a duct to another duct by creating a node automatically
+* split the crossed duct into two segments automatically
+* improve hover feedback for valid connection targets
+* add undo and redo support
+
+Acceptance Criteria:
+
+* users can draw multiple ducts in sequence without reselecting the tool
+* joining a duct into another duct creates a valid node automatically
+* graph remains valid after auto-splitting
+* editing workflow feels consistent and predictable
+
+### Phase 9 - Automatic Fittings And Local Losses
+
+Goal:
+Make local losses automatic, visible, and editable.
+
+Tasks:
+
+* detect elbows automatically from duct geometry
+* detect tee junctions automatically from graph topology
+* create auto-generated fitting objects connected to nodes
+* apply default zeta = 0.5 for elbows
+* apply default zeta = 0.5 for tee junctions
+* calculate tee downstream loss using downstream branch flow
+* allow user override of each fitting zeta-value
+* show fitting-by-fitting pressure loss breakdown
+
+Acceptance Criteria:
+
+* elbows and tees are detected without manual fitting placement
+* local losses appear in route calculations automatically
+* users can inspect and override default zeta-values
+* route pressure loss breakdown shows friction and local losses separately
+
+### Phase 10 - AHU Geometry And System Semantics
+
+Goal:
+Improve realism and terminology clarity.
+
+Tasks:
+
+* allow AHU length, width, and height to be set during placement or in properties
+* use consistent naming:
+  * Supply
+  * Extract air
+  * Outdoor air
+  * Exhaust
+* keep outdoor air flow linked to total supply flow
+* keep exhaust flow linked to total extract air flow
+* improve 2D and 3D symbols to match the updated terminology
+* add system visibility filters by air system
+
+Acceptance Criteria:
+
+* AHU dimensions are editable and visible in 2D and 3D
+* UI uses consistent air-system terminology
+* system-level flow behavior stays internally consistent
+* users can isolate systems visually
+
+### Phase 11 - Educational Visualization
+
+Goal:
+Make the tool more useful for classroom demonstration and student understanding.
+
+Tasks:
+
+* add teaching mode with simplified engineering display
+* show airflow direction arrows
+* show route-by-route pressure loss buildup
+* highlight critical path more clearly
+* highlight balancing differences more clearly
+* add optional animated flow visualization
+* create a small library of ready-made teaching examples
+
+Acceptance Criteria:
+
+* students can see which route is critical
+* students can see where local losses occur
+* users can demonstrate balancing differences visually
+* animation supports understanding without making the UI heavy or confusing
+
+---
+
+## 10. Development Rules
 
 Codex / developer must follow:
 
-* Implement **one phase at a time**
-* Do not modify unrelated files
-* Always read:
-
+* implement one phase at a time
+* do not modify unrelated files
+* always read:
   * docs/spec.md
   * docs/development-plan.md
-* Separate:
-
-  * calculation
-  * geometry
-  * UI
-* Always include unit tests for calculations
-* Keep code simple and readable
-* Avoid over-engineering
+* keep calculation, geometry, UI, and visualization separated
+* always include unit tests for engineering calculations
+* include regression tests for editing behavior
+* keep code simple and readable
+* avoid over-engineering
+* prefer understandable teaching behavior over hidden automation
 
 ---
 
-## 9. First Task for Codex
+## 11. Current Recommended Implementation Order
 
-Start with:
+Proceed in this order:
 
-**Phase 1 – Project Setup**
+1. Phase 8 - Editing Workflow Improvements
+2. Phase 9 - Automatic Fittings And Local Losses
+3. Phase 10 - AHU Geometry And System Semantics
+4. Phase 11 - Educational Visualization
 
-Then proceed to:
+Do not start animation work before:
 
-**Phase 2 – Core Data Model**
-
-Do NOT implement UI or 3D before:
-
-* data model
-* calculation engine
+* editing workflow is stable
+* fitting generation is reliable
+* local loss calculations are trustworthy
 
 ---
 
-## 10. Future Extensions (V2+)
+## 12. Future Extensions
 
-* Rectangular ducts
-* Manufacturer libraries
-* Automatic balancing
-* Export (CSV, PDF)
-* IFC/BIM integration
-* Multi-floor support
+Possible later extensions:
+
+* rectangular ducts
+* manufacturer libraries
+* automatic balancing suggestions with dampers
+* export to CSV or PDF
+* IFC or BIM integration
+* multi-floor support
+* classroom exercise mode with guided tasks
 
 ---
 

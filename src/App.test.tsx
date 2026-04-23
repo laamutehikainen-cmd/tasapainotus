@@ -12,6 +12,12 @@ describe("App", () => {
       screen.getByRole("button", { name: /draw duct/i })
     ).toBeInTheDocument();
     expect(
+      screen.getByRole("button", { name: /undo/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /redo/i })
+    ).toBeInTheDocument();
+    expect(
       screen.getByRole("img", { name: /duct network editor canvas/i })
     ).toBeInTheDocument();
     expect(

@@ -26,10 +26,17 @@ import {
   updateComponentInDocument,
   updateNodeInDocument
 } from "./ui/editorState";
+import {
+  createEditorHistoryState,
+  recordEditorHistory,
+  redoEditorHistory,
+  undoEditorHistory
+} from "./ui/editorHistory";
 import { Sidebar } from "./ui/sidebar";
 import { View3D } from "./view3d/View3D";
 
 function App() {
+  const [history, setHistory] = useState(createEditorHistoryState);
   const [document, setDocument] = useState<EditorDocument>(
     createInitialEditorDocument()
   );
@@ -81,6 +88,31 @@ function App() {
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent): void {
+      if (isEditableEventTarget(event.target)) {
+        return;
+      }
+
+      const modifierPressed = event.metaKey || event.ctrlKey;
+
+      if (modifierPressed && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+
+        if (event.shiftKey) {
+          handleRedo();
+        } else {
+          handleUndo();
+        }
+
+        return;
+      }
+
+      if (modifierPressed && event.key.toLowerCase() === "y") {
+        event.preventDefault();
+        handleRedo();
+
+        return;
+      }
+
       if (event.key !== "Delete" && event.key !== "Backspace") {
         return;
       }
@@ -96,14 +128,26 @@ function App() {
     window.addEventListener("keydown", handleKeyDown);
 
     return () => window.removeEventListener("keydown", handleKeyDown);
-  });
+  }, [selection, history, document, activeTool, ductDraft]);
 
   function applyDocumentState(
     nextDocument: EditorDocument,
     nextSelection: EditorSelection = selection,
-    nextDraft: DuctDraft | null = ductDraft
+    nextDraft: DuctDraft | null = ductDraft,
+    trackHistory = true
   ): void {
+    const currentSnapshot = {
+      document,
+      selection
+    };
+
     startTransition(() => {
+      if (trackHistory) {
+        setHistory((currentHistory) =>
+          recordEditorHistory(currentHistory, currentSnapshot)
+        );
+      }
+
       setDocument(nextDocument);
       setSelection(nextSelection);
       setDuctDraft(nextDraft);
@@ -119,7 +163,7 @@ function App() {
 
     setNotice(
       tool === "duct"
-        ? "Click one snapped point to start a duct, then click another to finish it."
+        ? "Click one snapped point to start a duct, then click another to finish it. The duct tool stays active for the next segment."
         : "Selection updates the properties panel and analysis sidebar."
     );
   }
@@ -143,9 +187,12 @@ function App() {
         }
 
         const result = completeDuctDraft(document, ductDraft, point);
+        const nextDraft = beginDuctDraft(result.document, point);
 
-        applyDocumentState(result.document, result.selection, null);
-        setNotice("Duct created.");
+        applyDocumentState(result.document, result.selection, nextDraft);
+        setNotice(
+          "Duct created. Continue from the latest endpoint or cancel duct to start elsewhere."
+        );
 
         return;
       }
@@ -173,6 +220,44 @@ function App() {
   function handleCancelDuctDraft(): void {
     setDuctDraft(null);
     setNotice("Duct draft cancelled.");
+  }
+
+  function handleUndo(): void {
+    const result = undoEditorHistory(history, {
+      document,
+      selection
+    });
+
+    if (!result) {
+      return;
+    }
+
+    startTransition(() => {
+      setHistory(result.history);
+      setDocument(result.snapshot.document);
+      setSelection(result.snapshot.selection);
+      setDuctDraft(null);
+    });
+    setNotice("Undo applied.");
+  }
+
+  function handleRedo(): void {
+    const result = redoEditorHistory(history, {
+      document,
+      selection
+    });
+
+    if (!result) {
+      return;
+    }
+
+    startTransition(() => {
+      setHistory(result.history);
+      setDocument(result.snapshot.document);
+      setSelection(result.snapshot.selection);
+      setDuctDraft(null);
+    });
+    setNotice("Redo applied.");
   }
 
   function handleNodeLabelChange(value: string): void {
@@ -372,7 +457,11 @@ function App() {
         activeTool={activeTool}
         hasSelection={selection !== null}
         ductDraftActive={ductDraft !== null}
+        canUndo={history.past.length > 0}
+        canRedo={history.future.length > 0}
         onSelectTool={handleToolChange}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
         onDeleteSelection={handleDeleteSelection}
         onCancelDuctDraft={handleCancelDuctDraft}
       />
@@ -438,3 +527,18 @@ function App() {
 }
 
 export default App;
+
+function isEditableEventTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  const tagName = target.tagName.toLowerCase();
+
+  return (
+    tagName === "input" ||
+    tagName === "textarea" ||
+    tagName === "select" ||
+    target.isContentEditable
+  );
+}

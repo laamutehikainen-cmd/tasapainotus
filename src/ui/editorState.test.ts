@@ -87,4 +87,32 @@ describe("editorState", () => {
     expect(outdoorTerminal?.flow.designFlowRateLps).toBe(260);
     expect(exhaustAirTerminal?.flow.designFlowRateLps).toBe(180);
   });
+
+  it("creates a junction node and splits an existing duct when a new branch connects into it", () => {
+    let document = createInitialEditorDocument();
+
+    document = placeComponentAtPoint(document, "ahu", { x: 0, y: 0, z: 0 }).document;
+    document = placeComponentAtPoint(document, "supplyTerminal", { x: 4, y: 0, z: 0 }).document;
+    document = placeComponentAtPoint(document, "supplyTerminal", { x: 2, y: 2, z: 0 }).document;
+
+    let draft = beginDuctDraft(document, { x: 0, y: 0, z: 0 });
+    document = completeDuctDraft(document, draft, { x: 4, y: 0, z: 0 }).document;
+
+    draft = beginDuctDraft(document, { x: 2, y: 2, z: 0 });
+    document = completeDuctDraft(document, draft, { x: 2, y: 0, z: 0 }).document;
+
+    const graph = buildGraphFromEditorDocument(document);
+    const junctionNode = document.nodes.find(
+      (node) => node.position.x === 2 && node.position.y === 0
+    );
+    const ductSegments = document.components.filter(
+      (component) => component.type === "ductSegment"
+    );
+
+    expect(junctionNode).toBeDefined();
+    expect(junctionNode?.kind).toBe("junction");
+    expect(ductSegments).toHaveLength(3);
+    expect(graph.getNodes()).toHaveLength(4);
+    expect(graph.getEdges()).toHaveLength(3);
+  });
 });

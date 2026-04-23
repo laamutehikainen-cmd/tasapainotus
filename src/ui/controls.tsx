@@ -48,7 +48,11 @@ interface ControlsProps {
   activeTool: ToolMode;
   hasSelection: boolean;
   ductDraftActive: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
   onSelectTool: (tool: ToolMode) => void;
+  onUndo: () => void;
+  onRedo: () => void;
   onDeleteSelection: () => void;
   onCancelDuctDraft: () => void;
 }
@@ -57,7 +61,11 @@ export function Controls({
   activeTool,
   hasSelection,
   ductDraftActive,
+  canUndo,
+  canRedo,
   onSelectTool,
+  onUndo,
+  onRedo,
   onDeleteSelection,
   onCancelDuctDraft
 }: ControlsProps) {
@@ -65,10 +73,26 @@ export function Controls({
     <section className="tool-panel" aria-label="Editor tools">
       <div className="tool-panel-header">
         <div>
-          <p className="section-kicker">Phase 5</p>
-          <h2>2D Drawing System</h2>
+          <p className="section-kicker">Phase 8</p>
+          <h2>Editing Workflow</h2>
         </div>
         <div className="tool-panel-actions">
+          <button
+            className="ghost-button"
+            type="button"
+            onClick={onUndo}
+            disabled={!canUndo}
+          >
+            Undo
+          </button>
+          <button
+            className="ghost-button"
+            type="button"
+            onClick={onRedo}
+            disabled={!canRedo}
+          >
+            Redo
+          </button>
           <button
             className="ghost-button"
             type="button"
@@ -108,4 +132,3 @@ export function Controls({
     </section>
   );
 }
-
