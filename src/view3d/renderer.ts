@@ -15,7 +15,7 @@ export function createView3DRenderer(
   });
 
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setPixelRatio(getRendererPixelRatio());
   renderer.setClearColor("#eff4f7", 0);
   renderer.domElement.style.width = "100%";
   renderer.domElement.style.height = "100%";
@@ -26,6 +26,7 @@ export function createView3DRenderer(
   return {
     renderer,
     resize(width: number, height: number): void {
+      renderer.setPixelRatio(getRendererPixelRatio());
       renderer.setSize(Math.max(width, 1), Math.max(height, 1), false);
     },
     dispose(): void {
@@ -33,4 +34,8 @@ export function createView3DRenderer(
       container.replaceChildren();
     }
   };
+}
+
+function getRendererPixelRatio(): number {
+  return Math.min(window.devicePixelRatio || 1, 2);
 }
