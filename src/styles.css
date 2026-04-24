@@ -307,14 +307,14 @@ body {
   font-size: 0.88rem;
 }
 
-.legend-chip-critical {
-  background: rgba(255, 233, 224, 0.96);
-  color: #9f451f;
+.legend-chip-supply-critical {
+  background: rgba(226, 244, 227, 0.96);
+  color: #235f28;
 }
 
-.legend-chip-joined {
-  background: rgba(216, 245, 248, 0.96);
-  color: #0f6976;
+.legend-chip-extract-critical {
+  background: rgba(255, 245, 209, 0.96);
+  color: #7a5600;
 }
 
 .canvas-surface {
