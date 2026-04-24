@@ -194,6 +194,13 @@ body {
   box-shadow: inset 0 0 0 1px rgba(229, 103, 58, 0.16);
 }
 
+.ghost-button.is-active {
+  border-color: rgba(229, 103, 58, 0.48);
+  background:
+    linear-gradient(180deg, rgba(255, 219, 205, 0.95), rgba(255, 245, 239, 0.9));
+  box-shadow: inset 0 0 0 1px rgba(229, 103, 58, 0.16);
+}
+
 .workspace {
   display: grid;
   grid-template-columns: minmax(0, 2.15fr) minmax(360px, 0.95fr);
@@ -332,17 +339,18 @@ body {
   stroke: rgba(229, 103, 58, 0.92);
 }
 
-.canvas-joined-route-highlights,
-.joined-route-line {
+.canvas-critical-supply-line {
+  stroke: #2e7d32;
+  stroke-linecap: round;
+  opacity: 0.72;
   pointer-events: none;
 }
 
-.joined-route-line {
-  stroke: var(--joined-route);
+.canvas-critical-extract-line {
+  stroke: #f9a825;
   stroke-linecap: round;
-  stroke-dasharray: 20 10;
-  opacity: 0.92;
-  filter: drop-shadow(0 0 4px rgba(25, 168, 187, 0.35));
+  opacity: 0.72;
+  pointer-events: none;
 }
 
 .duct-hit-area {
@@ -762,25 +770,6 @@ body {
   stroke-width: 2.2;
   stroke-linecap: round;
   stroke-linejoin: round;
-}
-
-.endpoint-marker.is-joined-critical .endpoint-ahu-shell,
-.endpoint-marker.is-joined-critical .endpoint-terminal-ring,
-.endpoint-marker.is-joined-critical .endpoint-air-ring {
-  stroke: var(--joined-route);
-  filter: drop-shadow(0 0 4px rgba(25, 168, 187, 0.28));
-}
-
-.endpoint-marker.is-joined-critical .endpoint-terminal-core,
-.endpoint-marker.is-joined-critical .endpoint-terminal-detail,
-.endpoint-marker.is-joined-critical .endpoint-air-arrow {
-  fill: var(--joined-route);
-  stroke: var(--joined-route);
-}
-
-.endpoint-marker.is-joined-critical .endpoint-ahu-port-dot {
-  stroke: var(--joined-route-soft);
-  stroke-width: 3;
 }
 
 .endpoint-marker.is-selected .endpoint-ahu-shell,

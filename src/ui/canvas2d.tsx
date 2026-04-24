@@ -56,7 +56,7 @@ interface Canvas2DProps {
   document: EditorDocument;
   automaticFittings: AutomaticFittingResult[];
   ductAirSystems: Record<string, AirSystemType>;
-  joinedCriticalComponentIds?: string[];
+  criticalPathComponentIds?: CriticalPathComponentIds;
   activeTool: ToolMode;
   selection: EditorSelection;
   ductDraft: DuctDraft | null;
@@ -66,13 +66,21 @@ interface Canvas2DProps {
   onSelectionChange: (selection: EditorSelection) => void;
 }
 
+export interface CriticalPathComponentIds {
+  supply: Set<string>;
+  extract: Set<string>;
+}
+
 type CanvasPointerEvent = React.PointerEvent<SVGElement>;
 
 export function Canvas2D({
   document,
   automaticFittings,
   ductAirSystems,
-  joinedCriticalComponentIds = [],
+  criticalPathComponentIds = {
+    supply: new Set<string>(),
+    extract: new Set<string>()
+  },
   activeTool,
   selection,
   ductDraft,
@@ -87,7 +95,6 @@ export function Canvas2D({
   const [isPanning, setIsPanning] = useState(false);
   const panSessionRef = useRef<PanSession | null>(null);
   const fittingsByNode = groupAutomaticFittingsByNode(automaticFittings);
-  const joinedCriticalComponentIdSet = new Set(joinedCriticalComponentIds);
   const viewBoxWidth =
     BASE_VIEWPORT_WIDTH_METERS * (1 / zoom) * CANVAS_SCALE_PX_PER_METER +
     CANVAS_PADDING_PX * 2;
@@ -460,18 +467,22 @@ export function Canvas2D({
             })}
         </g>
 
-        <g className="canvas-joined-route-highlights" aria-hidden="true">
+        <g className="canvas-critical-paths" aria-hidden="true">
           {document.components
             .filter(
               (
                 component
               ): component is Extract<NetworkComponent, { type: "ductSegment" }> =>
                 component.type === "ductSegment" &&
-                joinedCriticalComponentIdSet.has(component.id)
+                isCriticalPathDuct(component.id, criticalPathComponentIds)
             )
             .map((component) => {
               const startNode = findNode(document.nodes, component.nodeIds[0]);
               const endNode = findNode(document.nodes, component.nodeIds[1]);
+              const criticalSide = getCriticalPathDuctSide(
+                component.id,
+                criticalPathComponentIds
+              );
 
               if (!startNode || !endNode) {
                 return null;
@@ -486,14 +497,19 @@ export function Canvas2D({
 
               return (
                 <line
-                  key={`joined-route-${component.id}`}
+                  key={`critical-path-${component.id}`}
                   x1={start.x}
                   y1={start.y}
                   x2={end.x}
                   y2={end.y}
-                  className="joined-route-line"
+                  className={
+                    criticalSide === "supply"
+                      ? "canvas-critical-supply-line"
+                      : "canvas-critical-extract-line"
+                  }
                   style={{
-                    strokeWidth: Math.max(8, component.geometry.diameterMm / 42)
+                    strokeWidth:
+                      Math.max(4, component.geometry.diameterMm / 70) * 1.25
                   }}
                 />
               );
@@ -577,17 +593,11 @@ export function Canvas2D({
               const point = toCanvasPoint(node.position);
               const isSelected =
                 selection?.kind === "component" && selection.id === component.id;
-              const isJoinedCritical = joinedCriticalComponentIdSet.has(
-                component.id
-              );
 
               return (
                 <g
                   key={component.id}
-                  className={formatEndpointMarkerClassName(
-                    isSelected,
-                    isJoinedCritical
-                  )}
+                  className={isSelected ? "endpoint-marker is-selected" : "endpoint-marker"}
                   onPointerDown={(event) => {
                     handleAnchoredPointerDown(event, node.position, {
                       kind: "component",
@@ -906,19 +916,6 @@ function describeTool(tool: ToolMode): string {
   }
 }
 
-function formatEndpointMarkerClassName(
-  isSelected: boolean,
-  isJoinedCritical: boolean
-): string {
-  return [
-    "endpoint-marker",
-    isSelected ? "is-selected" : "",
-    isJoinedCritical ? "is-joined-critical" : ""
-  ]
-    .filter(Boolean)
-    .join(" ");
-}
-
 function describeFittingType(
   fittingType: AutomaticFittingResult["fittingType"]
 ): string {
@@ -928,6 +925,25 @@ function describeFittingType(
     case "tee":
       return "T";
   }
+}
+
+function isCriticalPathDuct(
+  componentId: string,
+  criticalPathComponentIds: CriticalPathComponentIds
+): boolean {
+  return (
+    criticalPathComponentIds.supply.has(componentId) ||
+    criticalPathComponentIds.extract.has(componentId)
+  );
+}
+
+function getCriticalPathDuctSide(
+  componentId: string,
+  criticalPathComponentIds: CriticalPathComponentIds
+): "supply" | "extract" {
+  return criticalPathComponentIds.supply.has(componentId)
+    ? "supply"
+    : "extract";
 }
 
 function groupAutomaticFittingsByNode(
