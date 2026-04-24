@@ -205,11 +205,13 @@ function createRouteSystemsSummary(routes: TerminalRouteResult[]): RouteSystemsS
     fanPressure: {
       supplyFanPressurePa: sumRoutePressureLossPa(
         supply.criticalPath,
-        outdoor.criticalPath
+        outdoor.criticalPath,
+        "ahu"
       ),
       exhaustFanPressurePa: sumRoutePressureLossPa(
         exhaust.criticalPath,
-        exhaustAir.criticalPath
+        exhaustAir.criticalPath,
+        "ahu"
       )
     }
   };
@@ -250,18 +252,44 @@ function findCriticalPath(
 
 function sumRoutePressureLossPa(
   primaryRoute: TerminalRouteResult | null,
-  secondaryRoute: TerminalRouteResult | null
+  secondaryRoute: TerminalRouteResult | null,
+  sharedComponentType: NetworkComponent["type"] | null = null
 ): number | null {
   if (!primaryRoute && !secondaryRoute) {
     return null;
   }
 
+  const sharedPressureLossPa =
+    primaryRoute && secondaryRoute && sharedComponentType
+      ? findSharedComponentPressureLossPa(
+          primaryRoute,
+          secondaryRoute,
+          sharedComponentType
+        )
+      : 0;
+
   return Number(
     (
       (primaryRoute?.totalPressureLossPa ?? 0) +
-      (secondaryRoute?.totalPressureLossPa ?? 0)
+      (secondaryRoute?.totalPressureLossPa ?? 0) -
+      sharedPressureLossPa
     ).toFixed(6)
   );
+}
+
+function findSharedComponentPressureLossPa(
+  primaryRoute: TerminalRouteResult,
+  secondaryRoute: TerminalRouteResult,
+  componentType: NetworkComponent["type"]
+): number {
+  const secondaryComponentIds = new Set(secondaryRoute.componentIds);
+  const sharedComponent = primaryRoute.componentBreakdown.find(
+    (item) =>
+      item.componentType === componentType &&
+      secondaryComponentIds.has(item.componentId)
+  );
+
+  return sharedComponent?.pressureLossPa ?? 0;
 }
 
 function deriveInlineComponentIdsForPath(
