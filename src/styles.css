@@ -457,11 +457,13 @@ body {
 }
 
 .metric-grid article,
+.property-subsection,
 .property-meta,
 .critical-card,
 .route-card,
 .balance-summary,
-.balance-group {
+.balance-group,
+.collapsible-section {
   border: 1px solid rgba(17, 46, 59, 0.12);
   border-radius: 18px;
   background: var(--panel-strong);
@@ -499,6 +501,26 @@ body {
 .property-group {
   display: grid;
   gap: 0.8rem;
+}
+
+.property-subsection {
+  padding: 0.8rem 0.85rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.property-subsection-header {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.property-subsection-header strong {
+  font-size: 0.98rem;
+}
+
+.property-subsection-header span {
+  color: var(--muted);
+  font-size: 0.88rem;
 }
 
 .property-fitting-list {
@@ -629,6 +651,52 @@ body {
 .balancing-system-section {
   display: grid;
   gap: 0.8rem;
+}
+
+.collapsible-section {
+  padding: 0.8rem 0.85rem;
+}
+
+.collapsible-section[open] {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.collapsible-summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.collapsible-summary::-webkit-details-marker {
+  display: none;
+}
+
+.collapsible-summary::before {
+  content: "+";
+  display: inline-grid;
+  place-items: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  background: rgba(212, 238, 243, 0.9);
+  color: #245365;
+  font-weight: 800;
+}
+
+.collapsible-section[open] > .collapsible-summary::before {
+  content: "-";
+}
+
+.technical-details {
+  border-top: 1px solid rgba(17, 46, 59, 0.08);
+  padding-top: 0.45rem;
+}
+
+.technical-details summary {
+  cursor: pointer;
+  color: #315567;
+  font-size: 0.88rem;
+  font-weight: 700;
 }
 
 .route-meta-row {
