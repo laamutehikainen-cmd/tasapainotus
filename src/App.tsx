@@ -7,7 +7,11 @@ import {
   type ComponentPerformanceResult,
   type RouteAnalysisResult
 } from "./calc";
-import { normalizeAhuRotationDegrees, type NetworkComponent } from "./components";
+import {
+  normalizeAhuRotationDegrees,
+  type NetworkComponent,
+  type TerminalDeviceType
+} from "./components";
 import { type DuctNode } from "./core/nodes";
 import { normalizeRoundDuctDiameterMm } from "./data/ductSizes";
 import { deriveDuctAirSystemLookup, describeDuctConnection } from "./ductAirSystems";
@@ -23,6 +27,8 @@ import {
   findNodeById,
   placeComponentAtPoint,
   removeAutomaticFittingOverrideFromDocument,
+  resetTerminalReferencePressureLossInDocument,
+  updateActiveDuctDiameterInDocument,
   type DuctDraft,
   type DuctDraftAnchor,
   type EditorDocument,
@@ -30,7 +36,9 @@ import {
   type ToolMode,
   upsertAutomaticFittingOverrideInDocument,
   updateComponentInDocument,
-  updateNodeInDocument
+  updateDefaultTerminalReferencePressureLossInDocument,
+  updateNodeInDocument,
+  updateTerminalReferencePressureLossInDocument
 } from "./ui/editorState";
 import {
   createEditorHistoryState,
@@ -409,6 +417,50 @@ function App() {
     );
   }
 
+  function handleAhuDevicePressureLossChange(value: number): void {
+    if (
+      selectedComponent?.type !== "ahu" ||
+      !Number.isFinite(value) ||
+      value < 0
+    ) {
+      return;
+    }
+
+    applyDocumentState(
+      updateComponentInDocument(document, selectedComponent.id, (component) =>
+        component.type === "ahu"
+          ? {
+              ...component,
+              metadata: {
+                ...component.metadata,
+                devicePressureLossPa: value
+              }
+            }
+          : component
+      )
+    );
+  }
+
+  function handleAhuFanRunningChange(value: boolean): void {
+    if (selectedComponent?.type !== "ahu") {
+      return;
+    }
+
+    applyDocumentState(
+      updateComponentInDocument(document, selectedComponent.id, (component) =>
+        component.type === "ahu"
+          ? {
+              ...component,
+              metadata: {
+                ...component.metadata,
+                fanRunning: value
+              }
+            }
+          : component
+      )
+    );
+  }
+
   function handleAhuRotationChange(value: number): void {
     if (
       selectedComponent?.type !== "ahu" ||
@@ -467,10 +519,64 @@ function App() {
               ...component,
               metadata: {
                 ...component.metadata,
-                terminalType: value
+                terminalType: value,
+                referencePressureLossPa:
+                  component.metadata.referencePressureLossSource === "default"
+                    ? document.settings.defaultTerminalReferencePressureLossPa[
+                        value
+                      ]
+                    : component.metadata.referencePressureLossPa
               }
             }
           : component
+      )
+    );
+  }
+
+  function handleTerminalReferencePressureLossChange(value: number): void {
+    if (selectedComponent?.type !== "terminal") {
+      return;
+    }
+
+    applyDocumentState(
+      updateTerminalReferencePressureLossInDocument(
+        document,
+        selectedComponent.id,
+        value
+      )
+    );
+  }
+
+  function handleTerminalReferencePressureLossReset(): void {
+    if (selectedComponent?.type !== "terminal") {
+      return;
+    }
+
+    applyDocumentState(
+      resetTerminalReferencePressureLossInDocument(
+        document,
+        selectedComponent.id
+      )
+    );
+  }
+
+  function handleActiveDuctDiameterChange(value: number): void {
+    if (!Number.isFinite(value) || value <= 0) {
+      return;
+    }
+
+    applyDocumentState(updateActiveDuctDiameterInDocument(document, value));
+  }
+
+  function handleDefaultTerminalReferencePressureLossChange(
+    terminalType: TerminalDeviceType,
+    value: number
+  ): void {
+    applyDocumentState(
+      updateDefaultTerminalReferencePressureLossInDocument(
+        document,
+        terminalType,
+        value
       )
     );
   }
@@ -593,7 +699,12 @@ function App() {
         ductDraftActive={ductDraft !== null}
         canUndo={history.past.length > 0}
         canRedo={history.future.length > 0}
+        settings={document.settings}
         onSelectTool={handleToolChange}
+        onActiveDuctDiameterChange={handleActiveDuctDiameterChange}
+        onDefaultTerminalReferencePressureLossChange={
+          handleDefaultTerminalReferencePressureLossChange
+        }
         onUndo={handleUndo}
         onRedo={handleRedo}
         onDeleteSelection={handleDeleteSelection}
@@ -638,8 +749,16 @@ function App() {
           onAhuRotationChange={handleAhuRotationChange}
           selectedAhuConnectedDuctCount={selectedAhuConnectedDuctCount}
           onAhuDimensionChange={handleAhuDimensionChange}
+          onAhuDevicePressureLossChange={handleAhuDevicePressureLossChange}
+          onAhuFanRunningChange={handleAhuFanRunningChange}
           onTerminalFlowRateChange={handleTerminalFlowRateChange}
         onTerminalTypeChange={handleTerminalTypeChange}
+        onTerminalReferencePressureLossChange={
+          handleTerminalReferencePressureLossChange
+        }
+        onTerminalReferencePressureLossReset={
+          handleTerminalReferencePressureLossReset
+        }
         selectedComponentResult={selectedComponentResult}
         selectedDuctAirSystemLabel={
           selectedComponent?.type === "ductSegment"

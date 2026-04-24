@@ -86,7 +86,7 @@ describe("buildView3DSceneData", () => {
         expect.objectContaining({
           id: "terminal-4",
           connectionDirection: { x: -1, y: 0, z: 0 },
-          connectedDuctDiameterMeters: 0.25
+          connectedDuctDiameterMeters: 0.16
         })
       ])
     );

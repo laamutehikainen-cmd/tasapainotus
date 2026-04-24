@@ -31,10 +31,14 @@ interface SidebarProps {
     dimension: "widthMeters" | "depthMeters" | "heightMeters",
     value: number
   ) => void;
+  onAhuDevicePressureLossChange: (value: number) => void;
+  onAhuFanRunningChange: (value: boolean) => void;
   onTerminalFlowRateChange: (value: number) => void;
   onTerminalTypeChange: (
     value: "supply" | "exhaust" | "outdoor" | "exhaustAir"
   ) => void;
+  onTerminalReferencePressureLossChange: (value: number) => void;
+  onTerminalReferencePressureLossReset: () => void;
   onDuctDiameterChange: (value: number) => void;
   onDuctLocalLossChange: (value: number) => void;
   onAutomaticFittingLossChange: (
@@ -59,8 +63,12 @@ export function Sidebar({
   onAhuRotationChange,
   selectedAhuConnectedDuctCount,
   onAhuDimensionChange,
+  onAhuDevicePressureLossChange,
+  onAhuFanRunningChange,
   onTerminalFlowRateChange,
   onTerminalTypeChange,
+  onTerminalReferencePressureLossChange,
+  onTerminalReferencePressureLossReset,
   onDuctDiameterChange,
   onDuctLocalLossChange,
   onAutomaticFittingLossChange,
@@ -138,8 +146,14 @@ export function Sidebar({
         onAhuRotationChange={onAhuRotationChange}
         selectedAhuConnectedDuctCount={selectedAhuConnectedDuctCount}
         onAhuDimensionChange={onAhuDimensionChange}
+        onAhuDevicePressureLossChange={onAhuDevicePressureLossChange}
+        onAhuFanRunningChange={onAhuFanRunningChange}
         onTerminalFlowRateChange={onTerminalFlowRateChange}
         onTerminalTypeChange={onTerminalTypeChange}
+        onTerminalReferencePressureLossChange={
+          onTerminalReferencePressureLossChange
+        }
+        onTerminalReferencePressureLossReset={onTerminalReferencePressureLossReset}
         onDuctDiameterChange={onDuctDiameterChange}
         onDuctLocalLossChange={onDuctLocalLossChange}
         onAutomaticFittingLossChange={onAutomaticFittingLossChange}

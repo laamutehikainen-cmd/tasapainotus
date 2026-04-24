@@ -1,4 +1,7 @@
+import type { TerminalDeviceType } from "../components";
+import { STANDARD_ROUND_DUCT_DIAMETERS_MM } from "../data/ductSizes";
 import type { ToolMode } from "./editorState";
+import type { EditorSettings } from "./editorState";
 
 interface ToolbarButton {
   tool: ToolMode;
@@ -50,7 +53,13 @@ interface ControlsProps {
   ductDraftActive: boolean;
   canUndo: boolean;
   canRedo: boolean;
+  settings: EditorSettings;
   onSelectTool: (tool: ToolMode) => void;
+  onActiveDuctDiameterChange: (value: number) => void;
+  onDefaultTerminalReferencePressureLossChange: (
+    terminalType: TerminalDeviceType,
+    value: number
+  ) => void;
   onUndo: () => void;
   onRedo: () => void;
   onDeleteSelection: () => void;
@@ -63,7 +72,10 @@ export function Controls({
   ductDraftActive,
   canUndo,
   canRedo,
+  settings,
   onSelectTool,
+  onActiveDuctDiameterChange,
+  onDefaultTerminalReferencePressureLossChange,
   onUndo,
   onRedo,
   onDeleteSelection,
@@ -129,6 +141,53 @@ export function Controls({
           </button>
         ))}
       </div>
+
+      <div className="property-metric-grid" aria-label="Draft defaults">
+        <label className="property-field">
+          <span>Next duct size (mm)</span>
+          <select
+            value={settings.activeDuctDiameterMm}
+            onChange={(event) =>
+              onActiveDuctDiameterChange(Number(event.target.value))
+            }
+          >
+            {STANDARD_ROUND_DUCT_DIAMETERS_MM.map((diameterMm) => (
+              <option key={diameterMm} value={diameterMm}>
+                {diameterMm}
+              </option>
+            ))}
+          </select>
+        </label>
+        {terminalDefaultFields.map((field) => (
+          <label key={field.terminalType} className="property-field">
+            <span>{field.label} default Pa</span>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              value={
+                settings.defaultTerminalReferencePressureLossPa[field.terminalType]
+              }
+              onChange={(event) =>
+                onDefaultTerminalReferencePressureLossChange(
+                  field.terminalType,
+                  Number(event.target.value)
+                )
+              }
+            />
+          </label>
+        ))}
+      </div>
     </section>
   );
 }
+
+const terminalDefaultFields: Array<{
+  terminalType: TerminalDeviceType;
+  label: string;
+}> = [
+  { terminalType: "supply", label: "Supply" },
+  { terminalType: "exhaust", label: "Extract" },
+  { terminalType: "outdoor", label: "Outdoor" },
+  { terminalType: "exhaustAir", label: "Exhaust" }
+];

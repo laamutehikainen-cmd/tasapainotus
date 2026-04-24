@@ -5,6 +5,7 @@ import {
   createFlowData,
   type EndpointComponent
 } from "./base";
+import { DEFAULT_TERMINAL_REFERENCE_PRESSURE_LOSS_PA } from "../data/defaultTerminalPressureLosses";
 
 export type TerminalDeviceType =
   | "supply"
@@ -19,6 +20,8 @@ export interface TerminalGeometry {
 export interface TerminalMetadata {
   label: string;
   terminalType: TerminalDeviceType;
+  referencePressureLossPa: number;
+  referencePressureLossSource: "default" | "override";
 }
 
 export interface CreateTerminalDeviceInput {
@@ -28,6 +31,8 @@ export interface CreateTerminalDeviceInput {
   designFlowRateLps: number;
   label?: string;
   markerSizeMeters?: number;
+  referencePressureLossPa?: number;
+  referencePressureLossSource?: "default" | "override";
 }
 
 export type TerminalDeviceComponent = EndpointComponent<
@@ -46,6 +51,11 @@ export function createTerminalDevice(
     input.markerSizeMeters ?? 0.4,
     "Terminal markerSizeMeters"
   );
+  assertPositiveNumber(
+    input.referencePressureLossPa ??
+      DEFAULT_TERMINAL_REFERENCE_PRESSURE_LOSS_PA[input.terminalType],
+    "Terminal referencePressureLossPa"
+  );
 
   return {
     id: input.id,
@@ -58,8 +68,12 @@ export function createTerminalDevice(
     pressureLossPa: null,
     metadata: {
       label: input.label ?? input.id,
-      terminalType: input.terminalType
+      terminalType: input.terminalType,
+      referencePressureLossPa:
+        input.referencePressureLossPa ??
+        DEFAULT_TERMINAL_REFERENCE_PRESSURE_LOSS_PA[input.terminalType],
+      referencePressureLossSource:
+        input.referencePressureLossSource ?? "default"
     }
   };
 }
-

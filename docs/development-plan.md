@@ -40,6 +40,9 @@ The current foundation already includes:
 * route detection
 * critical path identification
 * balancing-oriented comparison
+* duct size selection for new drafts
+* terminal reference pressure losses
+* AHU device pressure loss and stored fan running state
 * GitHub Pages deployment
 
 ### Current System Terms
@@ -75,16 +78,9 @@ The next version should improve the tool specifically for teaching and fast netw
 
 ### Included In The Next Version
 
-* duct drawing remains active until the user changes tool or cancels
-* automatic duct-to-duct connection with node creation
-* automatic splitting of an existing duct when another duct connects to it
-* automatic local loss generation for elbows and tee junctions
-* user-editable zeta-values for automatically generated fittings
-* AHU dimension input:
-  * length
-  * width
-  * height
-* clearer 2D symbols and clearer teaching-oriented route display
+* joined supply-side critical route visualization
+* joined extract-side critical route visualization
+* clearer 2D and 3D critical-route highlighting
 * optional teaching mode
 * optional animated flow visualization
 * better validation and user warnings
@@ -141,7 +137,17 @@ This keeps:
 * the calculations explainable
 * the UI editable for teaching use
 
-### 5.3 Suggested Folder Growth
+### 5.3 Modeling Strategy For Terminal And AHU Pressure Losses
+
+Terminal and AHU pressure losses are component-level losses, not fittings:
+
+* terminal pressure loss lives on the terminal component as `metadata.referencePressureLossPa`
+* the terminal source is stored as `metadata.referencePressureLossSource`
+* AHU device pressure loss lives on the AHU component as `metadata.devicePressureLossPa`
+* editor-level defaults per terminal type live in `EditorDocument.settings`
+* these component losses feed route totals through `networkPerformance.ts`
+
+### 5.4 Suggested Folder Growth
 
 ```text
 src/
@@ -169,6 +175,7 @@ src/
     fittings.ts
   data/
     ductSizes.ts
+    defaultTerminalPressureLosses.ts
     fittings.ts
   ui/
     canvas2d.tsx
@@ -215,6 +222,21 @@ Each AHU should include editable geometry:
 * width
 * height
 
+Terminal metadata includes:
+
+* referencePressureLossPa
+* referencePressureLossSource
+
+AHU metadata includes:
+
+* devicePressureLossPa
+* fanRunning
+
+Editor settings include:
+
+* activeDuctDiameterMm
+* defaultTerminalReferencePressureLossPa per terminal type
+
 ---
 
 ## 7. Engineering Rules
@@ -251,6 +273,10 @@ delta_p = zeta * (rho * v^2 / 2)
 * Outdoor air and exhaust routes are included in fan pressure requirements
 * Outdoor air and exhaust routes are not part of branch balancing
 * Supply and extract air balancing are handled separately
+* AHU device pressure loss contributes to every route through the AHU
+* Terminal reference pressure loss contributes to the route ending at that terminal
+* Supply fan pressure is the outdoor critical path plus the supply critical path
+* Extract fan pressure is the extract critical path plus the exhaust critical path
 
 ---
 
@@ -284,100 +310,61 @@ Completed read-only synchronized 3D view.
 
 Completed basic balancing-oriented comparison and fan pressure presentation.
 
+### Phase 8 - Editing Workflow Improvements
+
+Completed continuous duct drawing, automatic duct-to-duct junction creation, duct splitting, and undo/redo.
+
+### Phase 9 - Automatic Fittings And Local Losses
+
+Completed automatic elbow/tee detection, route fitting pressure losses, 2D fitting highlights, and editable zeta overrides.
+
+### Phase 10 - AHU Geometry And System Semantics
+
+Completed editable AHU dimensions, fixed AHU port semantics, system-colored ducts, and consistent Supply / Extract air / Outdoor air / Exhaust naming.
+
+### Phase 11 - Duct Size At Draft + Component Pressure Losses
+
+Completed active duct-size selection, terminal reference pressure losses, AHU device pressure loss, and stored fanRunning state.
+
 ---
 
 ## 9. Next Development Phases
 
-### Phase 8 - Editing Workflow Improvements
+### Phase 12 - Joined Critical Route Visualization
 
 Goal:
-Make the editor feel fast and natural for repeated teaching use.
+Show the supply-side and extract-side critical routes as a single end-to-end path.
 
 Tasks:
 
-* keep duct drawing active until tool change or cancel
-* allow fast repeated duct placement without reselecting the tool
-* connect a duct to another duct by creating a node automatically
-* split the crossed duct into two segments automatically
-* improve hover feedback for valid connection targets
-* add undo and redo support
+* derive supply-side joined critical route from Outdoor air path + AHU + hardest Supply route
+* derive extract-side joined critical route from hardest Extract route + AHU + Exhaust path
+* show joined route totals in the sidebar
+* highlight joined critical routes in 2D and 3D
 
 Acceptance Criteria:
 
-* users can draw multiple ducts in sequence without reselecting the tool
-* joining a duct into another duct creates a valid node automatically
-* graph remains valid after auto-splitting
-* editing workflow feels consistent and predictable
+* joined route total equals the matching fan pressure summary
+* missing endpoints produce a null joined route and a clear empty state
+* 2D and 3D highlights cover exactly the joined-route component IDs
 
-### Phase 9 - Automatic Fittings And Local Losses
+### Phase 13 - Flow Animation
 
 Goal:
-Make local losses automatic, visible, and editable.
+Give the teacher a start/stop particle animation that communicates airflow direction and terminal throw qualitatively.
 
 Tasks:
 
-* detect elbows automatically from duct geometry
-* detect tee junctions automatically from graph topology
-* create auto-generated fitting objects connected to nodes
-* apply default zeta = 0.5 for elbows
-* apply default zeta = 0.5 for tee junctions
-* calculate tee downstream loss using downstream branch flow
-* allow user override of each fitting zeta-value
-* show fitting-by-fitting pressure loss breakdown
+* create a lightweight Three.js particle simulation
+* use AHU `fanRunning` to start and stop emitters
+* derive terminal throw distance from terminal pressure loss
+* respect reduced-motion preferences
 
 Acceptance Criteria:
 
-* elbows and tees are detected without manual fitting placement
-* local losses appear in route calculations automatically
-* users can inspect and override default zeta-values
-* route pressure loss breakdown shows friction and local losses separately
-
-### Phase 10 - AHU Geometry And System Semantics
-
-Goal:
-Improve realism and terminology clarity.
-
-Tasks:
-
-* allow AHU length, width, and height to be set during placement or in properties
-* use consistent naming:
-  * Supply
-  * Extract air
-  * Outdoor air
-  * Exhaust
-* keep outdoor air flow linked to total supply flow
-* keep exhaust flow linked to total extract air flow
-* improve 2D and 3D symbols to match the updated terminology
-* add system visibility filters by air system
-
-Acceptance Criteria:
-
-* AHU dimensions are editable and visible in 2D and 3D
-* UI uses consistent air-system terminology
-* system-level flow behavior stays internally consistent
-* users can isolate systems visually
-
-### Phase 11 - Educational Visualization
-
-Goal:
-Make the tool more useful for classroom demonstration and student understanding.
-
-Tasks:
-
-* add teaching mode with simplified engineering display
-* show airflow direction arrows
-* show route-by-route pressure loss buildup
-* highlight critical path more clearly
-* highlight balancing differences more clearly
-* add optional animated flow visualization
-* create a small library of ready-made teaching examples
-
-Acceptance Criteria:
-
-* students can see which route is critical
-* students can see where local losses occur
-* users can demonstrate balancing differences visually
-* animation supports understanding without making the UI heavy or confusing
+* starting the fan shows visible terminal streams within 1 s
+* stopping the fan fades streams out
+* supply, extract, outdoor, and exhaust behavior are visually distinct
 
 ---
 
@@ -403,16 +390,14 @@ Codex / developer must follow:
 
 Proceed in this order:
 
-1. Phase 8 - Editing Workflow Improvements
-2. Phase 9 - Automatic Fittings And Local Losses
-3. Phase 10 - AHU Geometry And System Semantics
-4. Phase 11 - Educational Visualization
+1. Phase 12 - Joined Critical Route Visualization
+2. Phase 13 - Flow Animation
 
 Do not start animation work before:
 
-* editing workflow is stable
-* fitting generation is reliable
-* local loss calculations are trustworthy
+* duct-size selection is stable
+* AHU and terminal pressure losses flow into route calculations
+* joined critical route highlighting is in place in both 2D and 3D
 
 ---
 

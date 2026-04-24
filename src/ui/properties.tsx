@@ -24,11 +24,15 @@ interface PropertiesProps {
     dimension: "widthMeters" | "depthMeters" | "heightMeters",
     value: number
   ) => void;
+  onAhuDevicePressureLossChange: (value: number) => void;
+  onAhuFanRunningChange: (value: boolean) => void;
   selectedDuctAirSystemLabel: string | null;
   onTerminalFlowRateChange: (value: number) => void;
   onTerminalTypeChange: (
     value: "supply" | "exhaust" | "outdoor" | "exhaustAir"
   ) => void;
+  onTerminalReferencePressureLossChange: (value: number) => void;
+  onTerminalReferencePressureLossReset: () => void;
   onDuctDiameterChange: (value: number) => void;
   onDuctLocalLossChange: (value: number) => void;
   onAutomaticFittingLossChange: (
@@ -49,9 +53,13 @@ export function Properties({
   onAhuRotationChange,
   selectedAhuConnectedDuctCount,
   onAhuDimensionChange,
+  onAhuDevicePressureLossChange,
+  onAhuFanRunningChange,
   selectedDuctAirSystemLabel,
   onTerminalFlowRateChange,
   onTerminalTypeChange,
+  onTerminalReferencePressureLossChange,
+  onTerminalReferencePressureLossReset,
   onDuctDiameterChange,
   onDuctLocalLossChange,
   onAutomaticFittingLossChange,
@@ -225,6 +233,18 @@ export function Properties({
           )}
           <div className="property-metric-grid">
             <label className="property-field">
+              <span>Device pressure loss (Pa)</span>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={selectedComponent.metadata.devicePressureLossPa}
+                onChange={(event) =>
+                  onAhuDevicePressureLossChange(Number(event.target.value))
+                }
+              />
+            </label>
+            <label className="property-field">
               <span>Length (m)</span>
               <input
                 type="number"
@@ -270,6 +290,15 @@ export function Properties({
               />
             </label>
           </div>
+          <button
+            className="ghost-button"
+            type="button"
+            onClick={() =>
+              onAhuFanRunningChange(!selectedComponent.metadata.fanRunning)
+            }
+          >
+            {selectedComponent.metadata.fanRunning ? "Stop fan" : "Start fan"}
+          </button>
         </div>
       ) : null}
 
@@ -333,6 +362,34 @@ export function Properties({
               Exhaust flow follows the sum of all extract air terminals.
             </p>
           ) : null}
+          <label className="property-field">
+            <span>Reference pressure loss (Pa)</span>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              value={selectedComponent.metadata.referencePressureLossPa}
+              onChange={(event) =>
+                onTerminalReferencePressureLossChange(Number(event.target.value))
+              }
+            />
+          </label>
+          <div className="property-meta">
+            <span>Reference source</span>
+            <strong>
+              {selectedComponent.metadata.referencePressureLossSource}
+            </strong>
+          </div>
+          <button
+            className="ghost-button"
+            type="button"
+            disabled={
+              selectedComponent.metadata.referencePressureLossSource === "default"
+            }
+            onClick={onTerminalReferencePressureLossReset}
+          >
+            Reset to default
+          </button>
         </div>
       ) : null}
 

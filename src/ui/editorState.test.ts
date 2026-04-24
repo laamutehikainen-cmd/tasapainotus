@@ -8,8 +8,12 @@ import {
   deleteSelection,
   placeComponentAtPoint,
   removeAutomaticFittingOverrideFromDocument,
+  resetTerminalReferencePressureLossInDocument,
+  updateActiveDuctDiameterInDocument,
   upsertAutomaticFittingOverrideInDocument,
-  updateComponentInDocument
+  updateComponentInDocument,
+  updateDefaultTerminalReferencePressureLossInDocument,
+  updateTerminalReferencePressureLossInDocument
 } from "./editorState";
 
 describe("editorState", () => {
@@ -29,6 +33,30 @@ describe("editorState", () => {
     expect(graph.getEdges()).toHaveLength(1);
     expect(routeAnalysis.routes).toHaveLength(1);
     expect(routeAnalysis.criticalPath?.terminalId).toBe("terminal-4");
+  });
+
+  it("uses the active duct diameter when completing the next duct draft", () => {
+    let document = createInitialEditorDocument();
+
+    document = updateActiveDuctDiameterInDocument(document, 315);
+    document = placeComponentAtPoint(document, "ahu", { x: 1, y: 2, z: 0 }).document;
+    document = placeComponentAtPoint(document, "supplyTerminal", { x: 5, y: 2, z: 0 }).document;
+
+    let draft = beginDuctDraft(document, { x: 1, y: 2, z: 0 });
+    document = completeDuctDraft(document, draft, { x: 5, y: 2, z: 0 }).document;
+
+    document = updateActiveDuctDiameterInDocument(document, 160);
+    document = placeComponentAtPoint(document, "supplyTerminal", { x: 5, y: 4, z: 0 }).document;
+    draft = beginDuctDraft(document, { x: 5, y: 2, z: 0 });
+    document = completeDuctDraft(document, draft, { x: 5, y: 4, z: 0 }).document;
+
+    const ducts = document.components.filter(
+      (component) => component.type === "ductSegment"
+    );
+
+    expect(ducts).toHaveLength(2);
+    expect(ducts[0]?.geometry.diameterMm).toBe(315);
+    expect(ducts[1]?.geometry.diameterMm).toBe(160);
   });
 
   it("deletes components and prunes isolated nodes", () => {
@@ -89,6 +117,60 @@ describe("editorState", () => {
     expect(exhaustAirTerminal?.type).toBe("terminal");
     expect(outdoorTerminal?.flow.designFlowRateLps).toBe(260);
     expect(exhaustAirTerminal?.flow.designFlowRateLps).toBe(180);
+  });
+
+  it("syncs default terminal pressure losses while preserving overrides", () => {
+    let document = createInitialEditorDocument();
+
+    document = placeComponentAtPoint(document, "supplyTerminal", { x: 1, y: 1, z: 0 }).document;
+    document = placeComponentAtPoint(document, "supplyTerminal", { x: 2, y: 1, z: 0 }).document;
+    document = updateTerminalReferencePressureLossInDocument(
+      document,
+      "terminal-4",
+      65
+    );
+    document = updateDefaultTerminalReferencePressureLossInDocument(
+      document,
+      "supply",
+      42
+    );
+
+    const defaultTerminal = document.components.find(
+      (component) => component.id === "terminal-2"
+    );
+    const overriddenTerminal = document.components.find(
+      (component) => component.id === "terminal-4"
+    );
+
+    expect(defaultTerminal?.type).toBe("terminal");
+    expect(overriddenTerminal?.type).toBe("terminal");
+
+    if (
+      defaultTerminal?.type !== "terminal" ||
+      overriddenTerminal?.type !== "terminal"
+    ) {
+      throw new Error("Expected terminal components.");
+    }
+
+    expect(defaultTerminal.metadata.referencePressureLossPa).toBe(42);
+    expect(defaultTerminal.metadata.referencePressureLossSource).toBe("default");
+    expect(overriddenTerminal.metadata.referencePressureLossPa).toBe(65);
+    expect(overriddenTerminal.metadata.referencePressureLossSource).toBe("override");
+
+    document = resetTerminalReferencePressureLossInDocument(document, "terminal-4");
+
+    const resetTerminal = document.components.find(
+      (component) => component.id === "terminal-4"
+    );
+
+    expect(resetTerminal?.type).toBe("terminal");
+
+    if (resetTerminal?.type !== "terminal") {
+      throw new Error("Expected reset terminal.");
+    }
+
+    expect(resetTerminal.metadata.referencePressureLossPa).toBe(42);
+    expect(resetTerminal.metadata.referencePressureLossSource).toBe("default");
   });
 
   it("creates a junction node and splits an existing duct when a new branch connects into it", () => {
