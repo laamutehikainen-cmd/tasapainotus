@@ -326,27 +326,13 @@ Completed editable AHU dimensions, fixed AHU port semantics, system-colored duct
 
 Completed active duct-size selection, terminal reference pressure losses, AHU device pressure loss, and stored fanRunning state.
 
+### Phase 12 - Joined Critical Route Visualization
+
+Completed joined supply-side and extract-side critical routes with sidebar totals plus 2D and 3D highlights.
+
 ---
 
 ## 9. Next Development Phases
-
-### Phase 12 - Joined Critical Route Visualization
-
-Goal:
-Show the supply-side and extract-side critical routes as a single end-to-end path.
-
-Tasks:
-
-* derive supply-side joined critical route from Outdoor air path + AHU + hardest Supply route
-* derive extract-side joined critical route from hardest Extract route + AHU + Exhaust path
-* show joined route totals in the sidebar
-* highlight joined critical routes in 2D and 3D
-
-Acceptance Criteria:
-
-* joined route total equals the matching fan pressure summary
-* missing endpoints produce a null joined route and a clear empty state
-* 2D and 3D highlights cover exactly the joined-route component IDs
 
 ### Phase 13 - Flow Animation
 
@@ -390,8 +376,7 @@ Codex / developer must follow:
 
 Proceed in this order:
 
-1. Phase 12 - Joined Critical Route Visualization
-2. Phase 13 - Flow Animation
+1. Phase 13 - Flow Animation
 
 Do not start animation work before:
 
