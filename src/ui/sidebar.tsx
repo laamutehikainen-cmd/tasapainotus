@@ -332,7 +332,10 @@ function JoinedCriticalRouteCard({
       <span>
         {route.nodePath.length - 1} spans, {route.componentIds.length} components
       </span>
-      <p>{route.componentIds.join(" -> ")}</p>
+      <details className="technical-details">
+        <summary>Technical path</summary>
+        <p>{route.componentIds.join(" -> ")}</p>
+      </details>
     </article>
   );
 }
@@ -349,13 +352,13 @@ function RouteSystemSection({
   emptyMessage
 }: RouteSystemSectionProps) {
   return (
-    <section className="route-system-section">
-      <div className="route-system-header">
+    <details className="route-system-section collapsible-section">
+      <summary className="route-system-header collapsible-summary">
         <strong>{title}</strong>
         <span>
           {summary.routes.length} routes, {summary.totalFlowRateLps.toFixed(0)} L/s
         </span>
-      </div>
+      </summary>
 
       {summary.routes.length > 0 ? (
         <div className="route-list">
@@ -391,14 +394,17 @@ function RouteSystemSection({
               ) : (
                 <span>Reference route for this system</span>
               )}
-              <p>{route.componentIds.join(" -> ")}</p>
+              <details className="technical-details">
+                <summary>Technical path</summary>
+                <p>{route.componentIds.join(" -> ")}</p>
+              </details>
             </article>
           ))}
         </div>
       ) : (
         <p className="sidebar-empty">{emptyMessage}</p>
       )}
-    </section>
+    </details>
   );
 }
 
@@ -441,59 +447,65 @@ function BalancingSystemSection({
       </article>
 
       {result.branchGroups.length > 0 ? (
-        <div className="balance-group-list">
-          {result.branchGroups.map((group) => (
-            <article
-              key={group.nodeId}
-              className={
-                group.requiresBalancing
-                  ? "balance-group balance-group-warning"
-                  : "balance-group"
-              }
-            >
-              <header>
-                <div>
-                  <strong>{group.nodeLabel}</strong>
-                  <span>
-                    {group.branchCount} branches, {group.terminalCount} terminals
-                  </span>
-                </div>
-                <strong>{group.imbalancePa.toFixed(2)} Pa</strong>
-              </header>
-              <p>
-                Tolerance {group.tolerancePa.toFixed(2)} Pa, reference{" "}
-                {group.referencePressureLossPa.toFixed(2)} Pa
-              </p>
-              <p className="property-help">
-                Branch with highest loss sets the reference. Others need extra
-                resistance to match it.
-              </p>
-              <div className="balance-branch-list">
-                {group.branches.map((branch) => (
-                  <div key={branch.branchNodeId} className="balance-branch">
-                    <div>
-                      <strong>{branch.branchLabel}</strong>
-                      <span>
-                        {branch.representativeTerminalLabel}
-                        {branch.terminalIds.length > 1
-                          ? ` (${branch.terminalIds.length} terminals)`
-                          : ""}
-                      </span>
-                    </div>
-                    <div className="balance-branch-metrics">
-                      <strong>{branch.downstreamPressureLossPa.toFixed(2)} Pa</strong>
-                      <span>
-                        {branch.suggestedAdditionalLossPa > 0
-                          ? `+ ${branch.suggestedAdditionalLossPa.toFixed(2)} Pa resistance`
-                          : "Reference (hardest)"}
-                      </span>
-                    </div>
+        <details className="collapsible-section balance-details">
+          <summary className="route-system-header collapsible-summary">
+            <strong>Branch details</strong>
+            <span>{result.branchGroups.length} groups</span>
+          </summary>
+          <div className="balance-group-list">
+            {result.branchGroups.map((group) => (
+              <article
+                key={group.nodeId}
+                className={
+                  group.requiresBalancing
+                    ? "balance-group balance-group-warning"
+                    : "balance-group"
+                }
+              >
+                <header>
+                  <div>
+                    <strong>{group.nodeLabel}</strong>
+                    <span>
+                      {group.branchCount} branches, {group.terminalCount} terminals
+                    </span>
                   </div>
-                ))}
-              </div>
-            </article>
-          ))}
-        </div>
+                  <strong>{group.imbalancePa.toFixed(2)} Pa</strong>
+                </header>
+                <p>
+                  Tolerance {group.tolerancePa.toFixed(2)} Pa, reference{" "}
+                  {group.referencePressureLossPa.toFixed(2)} Pa
+                </p>
+                <p className="property-help">
+                  Branch with highest loss sets the reference. Others need extra
+                  resistance to match it.
+                </p>
+                <div className="balance-branch-list">
+                  {group.branches.map((branch) => (
+                    <div key={branch.branchNodeId} className="balance-branch">
+                      <div>
+                        <strong>{branch.branchLabel}</strong>
+                        <span>
+                          {branch.representativeTerminalLabel}
+                          {branch.terminalIds.length > 1
+                            ? ` (${branch.terminalIds.length} terminals)`
+                            : ""}
+                        </span>
+                      </div>
+                      <div className="balance-branch-metrics">
+                        <strong>{branch.downstreamPressureLossPa.toFixed(2)} Pa</strong>
+                        <span>
+                          {branch.suggestedAdditionalLossPa > 0
+                            ? `+ ${branch.suggestedAdditionalLossPa.toFixed(2)} Pa resistance`
+                            : "Reference (hardest)"}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        </details>
       ) : (
         <p className="sidebar-empty">{emptyMessage}</p>
       )}
