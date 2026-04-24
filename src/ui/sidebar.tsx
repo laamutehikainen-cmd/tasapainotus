@@ -173,16 +173,24 @@ export function Sidebar({
                 <span>Supply fan</span>
                 <strong>{formatPressure(analysis.systems.fanPressure.supplyFanPressurePa)}</strong>
                 <p>
-                  Outdoor air path {formatPressure(analysis.systems.outdoor.criticalPath?.totalPressureLossPa)}
-                  {" "}+ hardest supply route {formatPressure(analysis.systems.supply.criticalPath?.totalPressureLossPa)}
+                  {formatFanPressureFormula(
+                    analysis.systems.outdoor.criticalPath,
+                    analysis.systems.supply.criticalPath,
+                    "Outdoor side",
+                    "supply side"
+                  )}
                 </p>
               </article>
               <article className="critical-card">
                 <span>Extract fan</span>
                 <strong>{formatPressure(analysis.systems.fanPressure.exhaustFanPressurePa)}</strong>
                 <p>
-                  Hardest extract route {formatPressure(analysis.systems.exhaust.criticalPath?.totalPressureLossPa)}
-                  {" "}+ exhaust path {formatPressure(analysis.systems.exhaustAir.criticalPath?.totalPressureLossPa)}
+                  {formatFanPressureFormula(
+                    analysis.systems.exhaust.criticalPath,
+                    analysis.systems.exhaustAir.criticalPath,
+                    "Extract side",
+                    "exhaust side"
+                  )}
                 </p>
               </article>
             </div>
@@ -422,4 +430,49 @@ function describeTerminalType(
 
 function formatPressure(value: number | null | undefined): string {
   return value === null || value === undefined ? "N/A" : `${value.toFixed(2)} Pa`;
+}
+
+function formatFanPressureFormula(
+  firstRoute: RouteSystemSummary["criticalPath"],
+  secondRoute: RouteSystemSummary["criticalPath"],
+  firstLabel: string,
+  secondLabel: string
+): string {
+  if (!firstRoute && !secondRoute) {
+    return "Connected paths appear here when both sides are available.";
+  }
+
+  if (!firstRoute || !secondRoute) {
+    const route = firstRoute ?? secondRoute;
+    const label = firstRoute ? firstLabel : secondLabel;
+
+    return `${label} ${formatPressure(route?.totalPressureLossPa)}`;
+  }
+
+  const sharedAhuPressureLossPa = findSharedAhuPressureLossPa(
+    firstRoute,
+    secondRoute
+  );
+  const firstSidePressureLossPa =
+    firstRoute.totalPressureLossPa - sharedAhuPressureLossPa;
+  const secondSidePressureLossPa =
+    secondRoute.totalPressureLossPa - sharedAhuPressureLossPa;
+
+  return `${firstLabel} ${formatPressure(firstSidePressureLossPa)} + AHU ${formatPressure(
+    sharedAhuPressureLossPa
+  )} + ${secondLabel} ${formatPressure(secondSidePressureLossPa)}`;
+}
+
+function findSharedAhuPressureLossPa(
+  firstRoute: NonNullable<RouteSystemSummary["criticalPath"]>,
+  secondRoute: NonNullable<RouteSystemSummary["criticalPath"]>
+): number {
+  const secondRouteComponentIds = new Set(secondRoute.componentIds);
+  const sharedAhu = firstRoute.componentBreakdown.find(
+    (item) =>
+      item.componentType === "ahu" &&
+      secondRouteComponentIds.has(item.componentId)
+  );
+
+  return sharedAhu?.pressureLossPa ?? 0;
 }
