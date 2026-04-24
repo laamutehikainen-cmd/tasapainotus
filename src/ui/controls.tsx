@@ -53,6 +53,8 @@ interface ControlsProps {
   ductDraftActive: boolean;
   canUndo: boolean;
   canRedo: boolean;
+  showCriticalPaths: boolean;
+  criticalPathsAvailable: boolean;
   settings: EditorSettings;
   onSelectTool: (tool: ToolMode) => void;
   onActiveDuctDiameterChange: (value: number) => void;
@@ -62,6 +64,7 @@ interface ControlsProps {
   ) => void;
   onUndo: () => void;
   onRedo: () => void;
+  onToggleCriticalPaths: () => void;
   onDeleteSelection: () => void;
   onCancelDuctDraft: () => void;
 }
@@ -72,12 +75,15 @@ export function Controls({
   ductDraftActive,
   canUndo,
   canRedo,
+  showCriticalPaths,
+  criticalPathsAvailable,
   settings,
   onSelectTool,
   onActiveDuctDiameterChange,
   onDefaultTerminalReferencePressureLossChange,
   onUndo,
   onRedo,
+  onToggleCriticalPaths,
   onDeleteSelection,
   onCancelDuctDraft
 }: ControlsProps) {
@@ -85,7 +91,7 @@ export function Controls({
     <section className="tool-panel" aria-label="Editor tools">
       <div className="tool-panel-header">
         <div>
-          <p className="section-kicker">Phase 8</p>
+          <p className="section-kicker">Editor tools</p>
           <h2>Editing Workflow</h2>
         </div>
         <div className="tool-panel-actions">
@@ -104,6 +110,16 @@ export function Controls({
             disabled={!canRedo}
           >
             Redo
+          </button>
+          <button
+            className={
+              showCriticalPaths ? "ghost-button is-active" : "ghost-button"
+            }
+            type="button"
+            onClick={onToggleCriticalPaths}
+            disabled={!criticalPathsAvailable}
+          >
+            {showCriticalPaths ? "Critical paths on" : "Critical paths"}
           </button>
           <button
             className="ghost-button"

@@ -435,8 +435,8 @@ function BalancingSystemSection({
         <strong>{result.maxPressureDifferencePa.toFixed(2)} Pa</strong>
         <p>
           {result.requiresBalancing
-            ? "Lighter parallel branches can be trimmed toward the highest-loss reference branch."
-            : "Current parallel routes are close enough that no balancing loss is suggested."}
+            ? "Lighter branches need extra resistance. The reference branch (highest loss) needs no change - add resistance to the others."
+            : "All parallel branches are within tolerance - no extra resistance needed."}
         </p>
       </article>
 
@@ -464,6 +464,10 @@ function BalancingSystemSection({
                 Tolerance {group.tolerancePa.toFixed(2)} Pa, reference{" "}
                 {group.referencePressureLossPa.toFixed(2)} Pa
               </p>
+              <p className="property-help">
+                Branch with highest loss sets the reference. Others need extra
+                resistance to match it.
+              </p>
               <div className="balance-branch-list">
                 {group.branches.map((branch) => (
                   <div key={branch.branchNodeId} className="balance-branch">
@@ -480,8 +484,8 @@ function BalancingSystemSection({
                       <strong>{branch.downstreamPressureLossPa.toFixed(2)} Pa</strong>
                       <span>
                         {branch.suggestedAdditionalLossPa > 0
-                          ? `Add ${branch.suggestedAdditionalLossPa.toFixed(2)} Pa`
-                          : "Reference"}
+                          ? `+ ${branch.suggestedAdditionalLossPa.toFixed(2)} Pa resistance`
+                          : "Reference (hardest)"}
                       </span>
                     </div>
                   </div>

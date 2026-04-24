@@ -22,8 +22,10 @@ const AHU_COLLAR_LENGTH_METERS = 0.34;
 const TERMINAL_NECK_LENGTH_METERS = 0.22;
 const TERMINAL_PLATE_THICKNESS_METERS = 0.03;
 const TERMINAL_PLATE_GAP_METERS = 0.045;
-const CRITICAL_COLOR = "#e5673a";
-const JOINED_CRITICAL_COLOR = "#19a8bb";
+const SUPPLY_CRITICAL_COLOR = "#2e7d32";
+const EXTRACT_CRITICAL_COLOR = "#f9a825";
+
+type CriticalSide = "supply" | "extract" | null;
 
 export type View3DAirSystem = AirSystemType;
 
@@ -41,7 +43,7 @@ export interface View3DDuctDescriptor {
   end: Point3D;
   diameterMeters: number;
   isCritical: boolean;
-  isJoinedCritical: boolean;
+  criticalSide: CriticalSide;
   airSystem: AirSystemType | null;
 }
 
@@ -53,7 +55,7 @@ export interface View3DAhuPortDescriptor {
   anchorPosition: Point3D;
   diameterMeters: number;
   isCritical: boolean;
-  isJoinedCritical: boolean;
+  criticalSide: CriticalSide;
 }
 
 export interface View3DAhuEndpointDescriptor {
@@ -62,7 +64,7 @@ export interface View3DAhuEndpointDescriptor {
   label: string;
   position: Point3D;
   isCritical: boolean;
-  isJoinedCritical: boolean;
+  criticalSide: CriticalSide;
   connectionDirection: null;
   connectedDuctDiameterMeters: null;
   geometry: {
@@ -80,7 +82,7 @@ export interface View3DTerminalEndpointDescriptor {
   label: string;
   position: Point3D;
   isCritical: boolean;
-  isJoinedCritical: boolean;
+  criticalSide: CriticalSide;
   connectionDirection: Point3D | null;
   connectedDuctDiameterMeters: number | null;
   geometry: {
@@ -105,8 +107,7 @@ export function buildView3DSceneData(
   analysis: RouteAnalysisResult | null,
   ductAirSystems: Record<string, AirSystemType>
 ): View3DSceneData {
-  const criticalComponentIds = new Set(analysis?.criticalPath?.componentIds ?? []);
-  const joinedCriticalComponentIds = createJoinedCriticalComponentIdSet(analysis);
+  const criticalComponentIds = createCriticalComponentIdSets(analysis);
   const nodeById = new Map(document.nodes.map((node) => [node.id, node]));
   const connectedDuctsByNodeId = createConnectedDuctsByNodeId(document, nodeById);
   const endpoints: View3DEndpointDescriptor[] = [];
@@ -127,11 +128,9 @@ export function buildView3DSceneData(
       const endpoint = createAhuDescriptor(
         component,
         node,
-        criticalComponentIds.has(component.id),
-        joinedCriticalComponentIds.has(component.id),
+        getCriticalSide(component.id, criticalComponentIds),
         connectedDuctsByNodeId.get(node.id) ?? [],
-        criticalComponentIds,
-        joinedCriticalComponentIds
+        criticalComponentIds
       );
 
       endpoints.push(endpoint);
@@ -150,8 +149,7 @@ export function buildView3DSceneData(
       createTerminalDescriptor(
         component,
         node,
-        criticalComponentIds.has(component.id),
-        joinedCriticalComponentIds.has(component.id),
+        getCriticalSide(component.id, criticalComponentIds),
         connectedDuctsByNodeId.get(node.id) ?? []
       )
     );
@@ -177,8 +175,8 @@ export function buildView3DSceneData(
           ductAnchorByEdgeKey.get(createDuctAnchorKey(component.id, endNode.id)) ??
           createElevatedPlanarPoint(endNode.position, DUCT_CENTERLINE_HEIGHT_METERS),
         diameterMeters: component.geometry.diameterMm / 1000,
-        isCritical: criticalComponentIds.has(component.id),
-        isJoinedCritical: joinedCriticalComponentIds.has(component.id),
+        isCritical: getCriticalSide(component.id, criticalComponentIds) !== null,
+        criticalSide: getCriticalSide(component.id, criticalComponentIds),
         airSystem: ductAirSystems[component.id] ?? null
       });
 
@@ -193,13 +191,39 @@ export function buildView3DSceneData(
   };
 }
 
-function createJoinedCriticalComponentIdSet(
+interface CriticalComponentIdSets {
+  supply: Set<string>;
+  extract: Set<string>;
+}
+
+function createCriticalComponentIdSets(
   analysis: RouteAnalysisResult | null
-): Set<string> {
-  return new Set([
-    ...(analysis?.supplySideCriticalRoute?.componentIds ?? []),
-    ...(analysis?.extractSideCriticalRoute?.componentIds ?? [])
-  ]);
+): CriticalComponentIdSets {
+  return {
+    supply: new Set([
+      ...(analysis?.systems.supply.criticalPath?.componentIds ?? []),
+      ...(analysis?.systems.outdoor.criticalPath?.componentIds ?? [])
+    ]),
+    extract: new Set([
+      ...(analysis?.systems.exhaust.criticalPath?.componentIds ?? []),
+      ...(analysis?.systems.exhaustAir.criticalPath?.componentIds ?? [])
+    ])
+  };
+}
+
+function getCriticalSide(
+  componentId: string,
+  criticalComponentIds: CriticalComponentIdSets
+): CriticalSide {
+  if (criticalComponentIds.supply.has(componentId)) {
+    return "supply";
+  }
+
+  if (criticalComponentIds.extract.has(componentId)) {
+    return "extract";
+  }
+
+  return null;
 }
 
 export function createView3DScene(): THREE.Scene {
@@ -312,15 +336,20 @@ function createDuctMesh(duct: View3DDuctDescriptor): THREE.Mesh {
 }
 
 function getCriticalAwareColor(duct: View3DDuctDescriptor): string {
-  if (duct.isJoinedCritical) {
-    return JOINED_CRITICAL_COLOR;
-  }
+  const criticalSideColor = getCriticalSideColor(duct.criticalSide);
 
-  if (duct.isCritical) {
-    return CRITICAL_COLOR;
-  }
+  return criticalSideColor ?? getAirSystemColor(duct.airSystem);
+}
 
-  return getAirSystemColor(duct.airSystem);
+function getCriticalSideColor(criticalSide: CriticalSide): string | null {
+  switch (criticalSide) {
+    case "supply":
+      return SUPPLY_CRITICAL_COLOR;
+    case "extract":
+      return EXTRACT_CRITICAL_COLOR;
+    case null:
+      return null;
+  }
 }
 
 function createEndpointObject(endpoint: View3DEndpointDescriptor): THREE.Object3D {
@@ -346,11 +375,9 @@ function createAhuObject(
       endpoint.geometry.depthMeters
     ),
     new THREE.MeshStandardMaterial({
-      color: endpoint.isJoinedCritical
-        ? JOINED_CRITICAL_COLOR
-        : endpoint.isCritical
-          ? "#f09a78"
-          : "#123548",
+      color:
+        getCriticalSideColor(endpoint.criticalSide) ??
+        (endpoint.isCritical ? "#f09a78" : "#123548"),
       roughness: 0.3,
       metalness: 0.12
     })
@@ -395,11 +422,9 @@ function createAhuObject(
 function createTerminalObject(
   endpoint: View3DTerminalEndpointDescriptor
 ): THREE.Object3D {
-  const color = endpoint.isJoinedCritical
-    ? JOINED_CRITICAL_COLOR
-    : endpoint.isCritical
-      ? CRITICAL_COLOR
-      : getTerminalColor(endpoint.geometry.terminalType);
+  const color =
+    getCriticalSideColor(endpoint.criticalSide) ??
+    getTerminalColor(endpoint.geometry.terminalType);
   const material = new THREE.MeshStandardMaterial({
     color,
     roughness: 0.44,
@@ -499,11 +524,9 @@ function createAhuPortMesh(
   const mesh = new THREE.Mesh(
     new THREE.CylinderGeometry(collarRadius, collarRadius, length, 18),
     new THREE.MeshStandardMaterial({
-      color: port.isJoinedCritical
-        ? JOINED_CRITICAL_COLOR
-        : port.isCritical
-          ? CRITICAL_COLOR
-          : getAirSystemColor(port.airSystem),
+      color:
+        getCriticalSideColor(port.criticalSide) ??
+        getAirSystemColor(port.airSystem),
       roughness: 0.34,
       metalness: 0.16
     })
@@ -546,18 +569,15 @@ function createAhuBodyFacePosition(
 function createAhuDescriptor(
   component: AhuComponent,
   node: DuctNode,
-  isCritical: boolean,
-  isJoinedCritical: boolean,
+  criticalSide: CriticalSide,
   connectedDucts: ConnectedDuctDescriptor[],
-  criticalComponentIds: Set<string>,
-  joinedCriticalComponentIds: Set<string>
+  criticalComponentIds: CriticalComponentIdSets
 ): View3DAhuEndpointDescriptor {
   const ports = createAhuPortDescriptors(
     component,
     node,
     connectedDucts,
-    criticalComponentIds,
-    joinedCriticalComponentIds
+    criticalComponentIds
   );
 
   return {
@@ -565,8 +585,8 @@ function createAhuDescriptor(
     type: "ahu",
     label: component.metadata.label,
     position: node.position,
-    isCritical,
-    isJoinedCritical,
+    isCritical: criticalSide !== null,
+    criticalSide,
     connectionDirection: null,
     connectedDuctDiameterMeters: null,
     geometry: {
@@ -582,8 +602,7 @@ function createAhuDescriptor(
 function createTerminalDescriptor(
   component: TerminalDeviceComponent,
   node: DuctNode,
-  isCritical: boolean,
-  isJoinedCritical: boolean,
+  criticalSide: CriticalSide,
   connectedDucts: ConnectedDuctDescriptor[]
 ): View3DTerminalEndpointDescriptor {
   const connection = resolveEndpointConnection(node.position, connectedDucts);
@@ -593,8 +612,8 @@ function createTerminalDescriptor(
     type: "terminal",
     label: component.metadata.label,
     position: node.position,
-    isCritical,
-    isJoinedCritical,
+    isCritical: criticalSide !== null,
+    criticalSide,
     connectionDirection: connection.direction,
     connectedDuctDiameterMeters: connection.connectedDuctDiameterMeters,
     geometry: {
@@ -727,8 +746,7 @@ function createAhuPortDescriptors(
   component: AhuComponent,
   node: DuctNode,
   connectedDucts: ConnectedDuctDescriptor[],
-  criticalComponentIds: Set<string>,
-  joinedCriticalComponentIds: Set<string>
+  criticalComponentIds: CriticalComponentIdSets
 ): View3DAhuPortDescriptor[] {
   const anchors = getAhuPortAnchors(
     component,
@@ -752,10 +770,12 @@ function createAhuPortDescriptors(
         z: DUCT_CENTERLINE_HEIGHT_METERS
       },
       diameterMeters: connectedDuct?.diameterMeters ?? 0.25,
-      isCritical: connectedDuct ? criticalComponentIds.has(connectedDuct.componentId) : false,
-      isJoinedCritical: connectedDuct
-        ? joinedCriticalComponentIds.has(connectedDuct.componentId)
-        : false
+      isCritical: connectedDuct
+        ? getCriticalSide(connectedDuct.componentId, criticalComponentIds) !== null
+        : false,
+      criticalSide: connectedDuct
+        ? getCriticalSide(connectedDuct.componentId, criticalComponentIds)
+        : null
     };
   });
 }

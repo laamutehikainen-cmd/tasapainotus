@@ -80,6 +80,7 @@ describe("buildView3DSceneData", () => {
     expect(sceneData.bounds?.maxZ).toBeGreaterThanOrEqual(2);
     expect(sceneData.bounds?.maxY).toBeGreaterThan(3);
     expect(sceneData.ducts[0]?.isCritical).toBe(true);
+    expect(sceneData.ducts[0]?.criticalSide).toBe("supply");
     expect(sceneData.ducts[0]?.start.x).toBeGreaterThan(1);
     expect(sceneData.endpoints).toEqual(
       expect.arrayContaining([
@@ -97,12 +98,12 @@ describe("buildView3DSceneData", () => {
 
     document = placeComponentAtPoint(document, "ahu", { x: 1, y: 1, z: 0 }).document;
     document = placeComponentAtPoint(document, "supplyTerminal", { x: 4, y: 1, z: 0 }).document;
-    document = placeComponentAtPoint(document, "exhaustTerminal", { x: 4, y: 3, z: 0 }).document;
+    document = placeComponentAtPoint(document, "supplyTerminal", { x: 8, y: 1, z: 0 }).document;
 
     let draft = beginDuctDraft(document, { x: 1, y: 1, z: 0 });
     document = completeDuctDraft(document, draft, { x: 4, y: 1, z: 0 }).document;
     draft = beginDuctDraft(document, { x: 1, y: 1, z: 0 });
-    document = completeDuctDraft(document, draft, { x: 4, y: 3, z: 0 }).document;
+    document = completeDuctDraft(document, draft, { x: 8, y: 1, z: 0 }).document;
 
     const graph = buildGraphFromEditorDocument(document);
     const analysis = analyzeDuctRoutes(graph);
@@ -117,9 +118,14 @@ describe("buildView3DSceneData", () => {
     const nonCriticalTerminal = sceneData.endpoints.find(
       (item) => item.type === "terminal" && !item.isCritical
     );
+    const nonCriticalDuct = sceneData.ducts.find(
+      (duct) => duct.criticalSide === null
+    );
 
-    expect(criticalTerminal?.id).toBe(analysis.criticalPath?.terminalId);
+    expect(criticalTerminal?.criticalSide).toBe("supply");
     expect(nonCriticalTerminal?.isCritical).toBe(false);
+    expect(nonCriticalTerminal?.criticalSide).toBeNull();
+    expect(nonCriticalDuct?.isCritical).toBe(false);
   });
 
   it("assigns AHU ports to supply, extract, outdoor air, and exhaust sides", () => {
@@ -207,15 +213,18 @@ describe("buildView3DSceneData", () => {
     expect(portsBySystem.get("outdoor")?.direction).toEqual({ x: -1, y: 0, z: 0 });
     expect(portsBySystem.get("extract")?.direction).toEqual({ x: 0, y: -1, z: 0 });
     expect(portsBySystem.get("exhaust")?.direction).toEqual({ x: 0, y: 1, z: 0 });
-    expect(ahuEndpoint.isJoinedCritical).toBe(true);
+    expect(ahuEndpoint.criticalSide).toBe("supply");
+    expect(sceneData.endpoints.filter((endpoint) => endpoint.isCritical)).toHaveLength(5);
     expect(
-      sceneData.endpoints.filter((endpoint) => endpoint.isJoinedCritical)
-    ).toHaveLength(5);
-    expect(sceneData.ducts.every((duct) => duct.isJoinedCritical)).toBe(true);
-    expect(portsBySystem.get("supply")?.isJoinedCritical).toBe(true);
-    expect(portsBySystem.get("outdoor")?.isJoinedCritical).toBe(true);
-    expect(portsBySystem.get("extract")?.isJoinedCritical).toBe(true);
-    expect(portsBySystem.get("exhaust")?.isJoinedCritical).toBe(true);
+      sceneData.ducts.filter((duct) => duct.criticalSide === "supply")
+    ).toHaveLength(2);
+    expect(
+      sceneData.ducts.filter((duct) => duct.criticalSide === "extract")
+    ).toHaveLength(2);
+    expect(portsBySystem.get("supply")?.criticalSide).toBe("supply");
+    expect(portsBySystem.get("outdoor")?.criticalSide).toBe("supply");
+    expect(portsBySystem.get("extract")?.criticalSide).toBe("extract");
+    expect(portsBySystem.get("exhaust")?.criticalSide).toBe("extract");
     expect(
       sceneData.ducts.filter(
         (duct) => Math.abs(duct.start.x - 4) > 0.1 || Math.abs(duct.start.y - 4) > 0.1

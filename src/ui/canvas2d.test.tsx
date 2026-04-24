@@ -246,7 +246,29 @@ describe("Canvas2D", () => {
     });
   });
 
-  it("renders joined-route highlights without taking node selection away", () => {
+  it("keeps critical path overlay empty when critical paths are hidden", () => {
+    const document = createDocumentWithEndpointAndJunction();
+    const { container } = render(
+      <Canvas2D
+        document={document}
+        automaticFittings={[]}
+        ductAirSystems={{}}
+        activeTool="select"
+        selection={null}
+        ductDraft={null}
+        hoverPoint={null}
+        onHoverPointChange={() => {}}
+        onCanvasPoint={() => {}}
+        onSelectionChange={() => {}}
+      />
+    );
+
+    expect(
+      container.querySelectorAll(".canvas-critical-paths line")
+    ).toHaveLength(0);
+  });
+
+  it("renders a supply critical path overlay without taking node selection away", () => {
     const document = createDocumentWithEndpointAndJunction();
     const onSelectionChange = vi.fn();
     const { container } = render(
@@ -254,7 +276,10 @@ describe("Canvas2D", () => {
         document={document}
         automaticFittings={[]}
         ductAirSystems={{}}
-        joinedCriticalComponentIds={["ahu-2", "duct-6", "terminal-4"]}
+        criticalPathComponentIds={{
+          supply: new Set(["ahu-2", "duct-6", "terminal-4"]),
+          extract: new Set<string>()
+        }}
         activeTool="select"
         selection={null}
         ductDraft={null}
@@ -265,14 +290,12 @@ describe("Canvas2D", () => {
       />
     );
 
-    const joinedRouteLine = container.querySelector(".joined-route-line");
-    const joinedEndpointMarkers = container.querySelectorAll(
-      ".endpoint-marker.is-joined-critical"
+    const supplyCriticalLine = container.querySelector(
+      ".canvas-critical-supply-line"
     );
     const junctionNode = [...container.querySelectorAll(".node-dot")].at(-1);
 
-    expect(joinedRouteLine).not.toBeNull();
-    expect(joinedEndpointMarkers).toHaveLength(2);
+    expect(supplyCriticalLine).not.toBeNull();
     expect(junctionNode).not.toBeNull();
 
     fireEvent.pointerDown(junctionNode!);

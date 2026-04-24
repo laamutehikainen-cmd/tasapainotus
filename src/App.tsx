@@ -15,7 +15,7 @@ import {
 import { type DuctNode } from "./core/nodes";
 import { normalizeRoundDuctDiameterMm } from "./data/ductSizes";
 import { deriveDuctAirSystemLookup, describeDuctConnection } from "./ductAirSystems";
-import { Canvas2D } from "./ui/canvas2d";
+import { Canvas2D, type CriticalPathComponentIds } from "./ui/canvas2d";
 import { Controls } from "./ui/controls";
 import {
   beginDuctDraft,
@@ -57,6 +57,7 @@ function App() {
   const [activeTool, setActiveTool] = useState<ToolMode>("select");
   const [selection, setSelection] = useState<EditorSelection>(null);
   const [ductDraft, setDuctDraft] = useState<DuctDraft | null>(null);
+  const [showCriticalPaths, setShowCriticalPaths] = useState(false);
   const [hoverPoint, setHoverPoint] = useState<{
     x: number;
     y: number;
@@ -97,10 +98,10 @@ function App() {
       : [];
   let selectedComponentResult: ComponentPerformanceResult | null = null;
   const ductAirSystems = deriveDuctAirSystemLookup(document, routeAnalysis);
-  const joinedCriticalComponentIds = [
-    ...(routeAnalysis?.supplySideCriticalRoute?.componentIds ?? []),
-    ...(routeAnalysis?.extractSideCriticalRoute?.componentIds ?? [])
-  ];
+  const criticalPathComponentIds = createCriticalPathComponentIds(
+    routeAnalysis,
+    showCriticalPaths
+  );
   const selectedDuctAirSystem =
     selectedComponent?.type === "ductSegment"
       ? ductAirSystems[selectedComponent.id] ?? null
@@ -704,6 +705,8 @@ function App() {
         canUndo={history.past.length > 0}
         canRedo={history.future.length > 0}
         settings={document.settings}
+        showCriticalPaths={showCriticalPaths}
+        criticalPathsAvailable={routeAnalysis !== null}
         onSelectTool={handleToolChange}
         onActiveDuctDiameterChange={handleActiveDuctDiameterChange}
         onDefaultTerminalReferencePressureLossChange={
@@ -711,6 +714,9 @@ function App() {
         }
         onUndo={handleUndo}
         onRedo={handleRedo}
+        onToggleCriticalPaths={() =>
+          setShowCriticalPaths((currentValue) => !currentValue)
+        }
         onDeleteSelection={handleDeleteSelection}
         onCancelDuctDraft={handleCancelDuctDraft}
       />
@@ -721,7 +727,7 @@ function App() {
             document={document}
             automaticFittings={routeAnalysis?.automaticFittings ?? []}
             ductAirSystems={ductAirSystems}
-            joinedCriticalComponentIds={joinedCriticalComponentIds}
+            criticalPathComponentIds={criticalPathComponentIds}
             activeTool={activeTool}
             selection={selection}
             ductDraft={ductDraft}
@@ -813,4 +819,27 @@ function isEditableEventTarget(target: EventTarget | null): boolean {
     tagName === "select" ||
     target.isContentEditable
   );
+}
+
+function createCriticalPathComponentIds(
+  analysis: RouteAnalysisResult | null,
+  showCriticalPaths: boolean
+): CriticalPathComponentIds {
+  if (!analysis || !showCriticalPaths) {
+    return {
+      supply: new Set<string>(),
+      extract: new Set<string>()
+    };
+  }
+
+  return {
+    supply: new Set([
+      ...(analysis.systems.supply.criticalPath?.componentIds ?? []),
+      ...(analysis.systems.outdoor.criticalPath?.componentIds ?? [])
+    ]),
+    extract: new Set([
+      ...(analysis.systems.exhaust.criticalPath?.componentIds ?? []),
+      ...(analysis.systems.exhaustAir.criticalPath?.componentIds ?? [])
+    ])
+  };
 }
