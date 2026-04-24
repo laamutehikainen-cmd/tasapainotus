@@ -2,11 +2,13 @@ import type { NodeId } from "../core/nodes";
 import type { Point3D } from "../core/geometry";
 import {
   assertNonEmptyId,
+  assertNonNegativeNumber,
   assertPositiveNumber,
   createFlowData,
   type EndpointComponent
 } from "./base";
 import { AHU_PORT_SPECS, type AhuPortType } from "../airSystems";
+import { DEFAULT_AHU_DEVICE_PRESSURE_LOSS_PA } from "../data/defaultTerminalPressureLosses";
 
 export type AhuSystemType = "supply" | "exhaust" | "mixed";
 
@@ -20,6 +22,8 @@ export interface AhuMetadata {
   label: string;
   systemType: AhuSystemType;
   rotationDegrees: number;
+  devicePressureLossPa: number;
+  fanRunning: boolean;
 }
 
 export interface CreateAhuInput {
@@ -28,6 +32,8 @@ export interface CreateAhuInput {
   label?: string;
   systemType?: AhuSystemType;
   rotationDegrees?: number;
+  devicePressureLossPa?: number;
+  fanRunning?: boolean;
   geometry?: Partial<AhuGeometry>;
 }
 
@@ -61,6 +67,10 @@ export function createAhu(input: CreateAhuInput): AhuComponent {
   assertPositiveNumber(geometry.widthMeters, "AHU widthMeters");
   assertPositiveNumber(geometry.depthMeters, "AHU depthMeters");
   assertPositiveNumber(geometry.heightMeters, "AHU heightMeters");
+  assertNonNegativeNumber(
+    input.devicePressureLossPa ?? DEFAULT_AHU_DEVICE_PRESSURE_LOSS_PA,
+    "AHU devicePressureLossPa"
+  );
 
   return {
     id: input.id,
@@ -72,7 +82,10 @@ export function createAhu(input: CreateAhuInput): AhuComponent {
     metadata: {
       label: input.label ?? input.id,
       systemType: input.systemType ?? "supply",
-      rotationDegrees: normalizeAhuRotationDegrees(input.rotationDegrees ?? 0)
+      rotationDegrees: normalizeAhuRotationDegrees(input.rotationDegrees ?? 0),
+      devicePressureLossPa:
+        input.devicePressureLossPa ?? DEFAULT_AHU_DEVICE_PRESSURE_LOSS_PA,
+      fanRunning: input.fanRunning ?? false
     }
   };
 }
