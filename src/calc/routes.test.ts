@@ -20,9 +20,9 @@ describe("analyzeDuctRoutes", () => {
         terminalType: "supply",
         nodePath: ["node-ahu", "node-main", "node-room-a"],
         componentIds: ["ahu-1", "duct-main", "duct-branch-a", "terminal-room-a"],
-        totalComponentPressureLossPa: expect.closeTo(2.5238484296309914, 10),
+        totalComponentPressureLossPa: expect.closeTo(182.52384842963098, 10),
         totalFittingPressureLossPa: expect.closeTo(4.980138818388187, 10),
-        totalPressureLossPa: expect.closeTo(7.503987248019179, 10)
+        totalPressureLossPa: expect.closeTo(187.50398724801917, 10)
       }),
       expect.objectContaining({
         terminalId: "terminal-room-b",
@@ -30,16 +30,16 @@ describe("analyzeDuctRoutes", () => {
         terminalType: "supply",
         nodePath: ["node-ahu", "node-main", "node-room-b"],
         componentIds: ["ahu-1", "duct-main", "duct-branch-b", "terminal-room-b"],
-        totalComponentPressureLossPa: expect.closeTo(2.607585465234198, 10),
+        totalComponentPressureLossPa: expect.closeTo(182.6075854652342, 10),
         totalFittingPressureLossPa: expect.closeTo(4.980138818388187, 10),
-        totalPressureLossPa: expect.closeTo(7.587724283622385, 10)
+        totalPressureLossPa: expect.closeTo(187.58772428362238, 10)
       })
     ]);
 
     expect(analysis.criticalPath).toEqual(
       expect.objectContaining({
         terminalId: "terminal-room-b",
-        totalPressureLossPa: expect.closeTo(7.587724283622385, 10)
+        totalPressureLossPa: expect.closeTo(187.58772428362238, 10)
       })
     );
     expect(analysis.networkPerformance.systemFlowRateLps).toBe(400);
@@ -56,7 +56,7 @@ describe("analyzeDuctRoutes", () => {
       expect.objectContaining({
         componentId: "ahu-1",
         componentType: "ahu",
-        pressureLossPa: 0
+        pressureLossPa: 150
       }),
       expect.objectContaining({
         componentId: "duct-main",
@@ -71,7 +71,7 @@ describe("analyzeDuctRoutes", () => {
       expect.objectContaining({
         componentId: "terminal-room-a",
         componentType: "terminal",
-        pressureLossPa: 0
+        pressureLossPa: 30
       })
     ]);
 
@@ -97,8 +97,42 @@ describe("analyzeDuctRoutes", () => {
     expect(analysis.systems.exhaust.criticalPath?.terminalId).toBe("terminal-exhaust-room");
     expect(analysis.systems.outdoor.criticalPath?.terminalId).toBe("terminal-outdoor");
     expect(analysis.systems.exhaustAir.criticalPath?.terminalId).toBe("terminal-exhaust-air");
-    expect(analysis.systems.fanPressure.supplyFanPressurePa).toBeCloseTo(5.549688, 6);
-    expect(analysis.systems.fanPressure.exhaustFanPressurePa).toBeCloseTo(4.210511, 6);
+    expect(analysis.systems.fanPressure.supplyFanPressurePa).toBeCloseTo(355.549688, 6);
+    expect(analysis.systems.fanPressure.exhaustFanPressurePa).toBeCloseTo(374.210511, 6);
+  });
+
+  it("adds AHU and terminal pressure losses to route totals and fan pressure", () => {
+    const analysis = analyzeDuctRoutes(createCustomComponentLossNetwork());
+    const supplyRoute = analysis.systems.supply.criticalPath;
+    const outdoorRoute = analysis.systems.outdoor.criticalPath;
+
+    expect(supplyRoute).not.toBeNull();
+    expect(outdoorRoute).not.toBeNull();
+    expect(supplyRoute?.componentBreakdown).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          componentId: "ahu-1",
+          pressureLossPa: 180
+        }),
+        expect.objectContaining({
+          componentId: "terminal-supply",
+          pressureLossPa: 55
+        })
+      ])
+    );
+    expect(outdoorRoute?.componentBreakdown).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          componentId: "terminal-outdoor",
+          pressureLossPa: 25
+        })
+      ])
+    );
+    expect(supplyRoute?.totalPressureLossPa).toBeGreaterThan(235);
+    expect(analysis.systems.fanPressure.supplyFanPressurePa).toBeCloseTo(
+      supplyRoute!.totalPressureLossPa + outdoorRoute!.totalPressureLossPa,
+      6
+    );
   });
 
   it("adds an automatic elbow loss on a turning route with two connected ducts", () => {
@@ -335,6 +369,62 @@ function createElbowNetwork(): DuctNetworkGraph {
       nodeId: "node-terminal",
       terminalType: "supply",
       designFlowRateLps: 150
+    })
+  );
+
+  return graph;
+}
+
+function createCustomComponentLossNetwork(): DuctNetworkGraph {
+  const graph = new DuctNetworkGraph();
+
+  graph.addNode(createNode({ id: "node-ahu", kind: "endpoint", position: { x: 0, y: 0, z: 0 } }));
+  graph.addNode(createNode({ id: "node-supply", kind: "endpoint", position: { x: 2, y: 0, z: 0 } }));
+  graph.addNode(createNode({ id: "node-outdoor", kind: "endpoint", position: { x: -2, y: 0, z: 0 } }));
+
+  graph.addComponent(
+    createAhu({
+      id: "ahu-1",
+      nodeId: "node-ahu",
+      devicePressureLossPa: 180
+    })
+  );
+  graph.addComponent(
+    createDuctSegment({
+      id: "duct-supply",
+      startNodeId: "node-ahu",
+      endNodeId: "node-supply",
+      diameterMm: 250,
+      lengthMeters: 2
+    })
+  );
+  graph.addComponent(
+    createDuctSegment({
+      id: "duct-outdoor",
+      startNodeId: "node-ahu",
+      endNodeId: "node-outdoor",
+      diameterMm: 250,
+      lengthMeters: 2
+    })
+  );
+  graph.addComponent(
+    createTerminalDevice({
+      id: "terminal-supply",
+      nodeId: "node-supply",
+      terminalType: "supply",
+      designFlowRateLps: 180,
+      referencePressureLossPa: 55,
+      referencePressureLossSource: "override"
+    })
+  );
+  graph.addComponent(
+    createTerminalDevice({
+      id: "terminal-outdoor",
+      nodeId: "node-outdoor",
+      terminalType: "outdoor",
+      designFlowRateLps: 180,
+      referencePressureLossPa: 25,
+      referencePressureLossSource: "override"
     })
   );
 

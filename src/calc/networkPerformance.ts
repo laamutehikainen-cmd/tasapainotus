@@ -77,21 +77,33 @@ function createComponentPerformanceResult(
   flowPropagation: FlowPropagationResult,
   airProperties: AirProperties
 ): ComponentPerformanceResult {
-  if (component.type !== "ductSegment") {
+  if (component.type === "ahu") {
     return {
       componentId: component.id,
       componentType: component.type,
-      flowRateLps:
-        component.type === "ahu"
-          ? flowPropagation.systemFlowRateLps
-          : component.flow.designFlowRateLps ?? 0,
+      flowRateLps: flowPropagation.systemFlowRateLps,
       velocityMps: null,
       reynoldsNumber: null,
       hydraulicDiameterMeters: null,
       frictionFactor: null,
       frictionPressureLossPa: 0,
-      localPressureLossPa: 0,
-      totalPressureLossPa: 0
+      localPressureLossPa: component.metadata.devicePressureLossPa,
+      totalPressureLossPa: component.metadata.devicePressureLossPa
+    };
+  }
+
+  if (component.type === "terminal") {
+    return {
+      componentId: component.id,
+      componentType: component.type,
+      flowRateLps: component.flow.designFlowRateLps ?? 0,
+      velocityMps: null,
+      reynoldsNumber: null,
+      hydraulicDiameterMeters: null,
+      frictionFactor: null,
+      frictionPressureLossPa: 0,
+      localPressureLossPa: component.metadata.referencePressureLossPa,
+      totalPressureLossPa: component.metadata.referencePressureLossPa
     };
   }
 
@@ -150,4 +162,3 @@ function analyzeDuctSegmentPerformance(
     totalPressureLossPa: frictionPressureLossPa + localPressureLossPa
   };
 }
-

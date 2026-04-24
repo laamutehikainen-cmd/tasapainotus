@@ -20,13 +20,13 @@ describe("analyzeRouteBalancing", () => {
           expect.objectContaining({
             branchNodeId: "node-room-b",
             branchLabel: "Room B diffuser",
-            downstreamPressureLossPa: expect.closeTo(6.989828, 6),
+            downstreamPressureLossPa: expect.closeTo(36.989828, 6),
             suggestedAdditionalLossPa: 0
           }),
           expect.objectContaining({
             branchNodeId: "node-room-a",
             branchLabel: "Room A diffuser",
-            downstreamPressureLossPa: expect.closeTo(6.906091, 6),
+            downstreamPressureLossPa: expect.closeTo(36.906091, 6),
             suggestedAdditionalLossPa: expect.closeTo(0.083737, 6)
           })
         ]

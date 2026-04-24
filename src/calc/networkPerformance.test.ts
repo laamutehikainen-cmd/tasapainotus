@@ -33,12 +33,68 @@ describe("analyzeDuctNetworkPerformance", () => {
     expect(ahu.flowRateLps).toBe(400);
     expect(ahu.velocityMps).toBeNull();
     expect(ahu.reynoldsNumber).toBeNull();
-    expect(ahu.totalPressureLossPa).toBe(0);
+    expect(ahu.localPressureLossPa).toBe(150);
+    expect(ahu.totalPressureLossPa).toBe(150);
 
     expect(terminal.flowRateLps).toBe(200);
     expect(terminal.velocityMps).toBeNull();
     expect(terminal.reynoldsNumber).toBeNull();
-    expect(terminal.totalPressureLossPa).toBe(0);
+    expect(terminal.localPressureLossPa).toBe(30);
+    expect(terminal.totalPressureLossPa).toBe(30);
+  });
+
+  it("includes AHU and terminal component pressure losses", () => {
+    const graph = new DuctNetworkGraph();
+
+    graph.addNode(
+      createNode({
+        id: "node-ahu",
+        kind: "endpoint",
+        position: { x: 0, y: 0, z: 0 }
+      })
+    );
+    graph.addNode(
+      createNode({
+        id: "node-terminal",
+        kind: "endpoint",
+        position: { x: 2, y: 0, z: 0 }
+      })
+    );
+    graph.addComponent(
+      createAhu({
+        id: "ahu-1",
+        nodeId: "node-ahu",
+        devicePressureLossPa: 175
+      })
+    );
+    graph.addComponent(
+      createDuctSegment({
+        id: "duct-1",
+        startNodeId: "node-ahu",
+        endNodeId: "node-terminal",
+        diameterMm: 250,
+        lengthMeters: 2
+      })
+    );
+    graph.addComponent(
+      createTerminalDevice({
+        id: "terminal-1",
+        nodeId: "node-terminal",
+        terminalType: "supply",
+        designFlowRateLps: 200,
+        referencePressureLossPa: 45,
+        referencePressureLossSource: "override"
+      })
+    );
+
+    const analysis = analyzeDuctNetworkPerformance(graph);
+    const ahu = getComponentPerformanceResult(analysis, "ahu-1");
+    const terminal = getComponentPerformanceResult(analysis, "terminal-1");
+
+    expect(ahu.totalPressureLossPa).toBe(175);
+    expect(ahu.localPressureLossPa).toBe(175);
+    expect(terminal.totalPressureLossPa).toBe(45);
+    expect(terminal.localPressureLossPa).toBe(45);
   });
 
   it("includes local loss coefficients in total component pressure loss", () => {
