@@ -810,9 +810,9 @@ function getTerminalColor(terminalType: TerminalDeviceType): string {
     case "supply":
       return "#2c819c";
     case "exhaust":
-      return "#2b8f55";
-    case "outdoor":
       return "#d4aa2a";
+    case "outdoor":
+      return "#2b8f55";
     case "exhaustAir":
       return "#8b5a2b";
   }

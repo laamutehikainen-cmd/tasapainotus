@@ -32,14 +32,14 @@ export const AHU_PORT_SPECS: readonly AhuPortSpec[] = [
     portType: "extract",
     label: "Extract air",
     shortLabel: "E",
-    color: "#2b8f55",
+    color: "#d4aa2a",
     localDirection: { x: 0, y: -1 }
   },
   {
     portType: "outdoor",
     label: "Outdoor air",
     shortLabel: "O",
-    color: "#d4aa2a",
+    color: "#2b8f55",
     localDirection: { x: -1, y: 0 }
   },
   {
@@ -56,9 +56,9 @@ export function getAirSystemColor(airSystem: AirSystemType | null | undefined): 
     case "supply":
       return "#2c819c";
     case "extract":
-      return "#2b8f55";
-    case "outdoor":
       return "#d4aa2a";
+    case "outdoor":
+      return "#2b8f55";
     case "exhaust":
       return "#8b5a2b";
     case "mixed":
