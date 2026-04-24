@@ -246,6 +246,43 @@ describe("Canvas2D", () => {
     });
   });
 
+  it("renders joined-route highlights without taking node selection away", () => {
+    const document = createDocumentWithEndpointAndJunction();
+    const onSelectionChange = vi.fn();
+    const { container } = render(
+      <Canvas2D
+        document={document}
+        automaticFittings={[]}
+        ductAirSystems={{}}
+        joinedCriticalComponentIds={["ahu-2", "duct-6", "terminal-4"]}
+        activeTool="select"
+        selection={null}
+        ductDraft={null}
+        hoverPoint={null}
+        onHoverPointChange={() => {}}
+        onCanvasPoint={() => {}}
+        onSelectionChange={onSelectionChange}
+      />
+    );
+
+    const joinedRouteLine = container.querySelector(".joined-route-line");
+    const joinedEndpointMarkers = container.querySelectorAll(
+      ".endpoint-marker.is-joined-critical"
+    );
+    const junctionNode = [...container.querySelectorAll(".node-dot")].at(-1);
+
+    expect(joinedRouteLine).not.toBeNull();
+    expect(joinedEndpointMarkers).toHaveLength(2);
+    expect(junctionNode).not.toBeNull();
+
+    fireEvent.pointerDown(junctionNode!);
+
+    expect(onSelectionChange).toHaveBeenCalledWith({
+      kind: "node",
+      id: "node-5"
+    });
+  });
+
   it("starts duct drawing from a color-coded AHU port anchor", () => {
     const document = createDocumentWithEndpointAndJunction();
     const onCanvasPoint = vi.fn();

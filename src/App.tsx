@@ -97,6 +97,10 @@ function App() {
       : [];
   let selectedComponentResult: ComponentPerformanceResult | null = null;
   const ductAirSystems = deriveDuctAirSystemLookup(document, routeAnalysis);
+  const joinedCriticalComponentIds = [
+    ...(routeAnalysis?.supplySideCriticalRoute?.componentIds ?? []),
+    ...(routeAnalysis?.extractSideCriticalRoute?.componentIds ?? [])
+  ];
   const selectedDuctAirSystem =
     selectedComponent?.type === "ductSegment"
       ? ductAirSystems[selectedComponent.id] ?? null
@@ -717,6 +721,7 @@ function App() {
             document={document}
             automaticFittings={routeAnalysis?.automaticFittings ?? []}
             ductAirSystems={ductAirSystems}
+            joinedCriticalComponentIds={joinedCriticalComponentIds}
             activeTool={activeTool}
             selection={selection}
             ductDraft={ductDraft}

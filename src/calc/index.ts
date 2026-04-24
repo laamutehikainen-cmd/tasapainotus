@@ -50,6 +50,7 @@ export {
 } from "./balancing";
 export {
   analyzeDuctRoutes,
+  type JoinedCriticalRoute,
   type RouteAnalysisResult,
   type RouteComponentBreakdownItem,
   type RouteSystemSummary,

@@ -101,6 +101,60 @@ describe("analyzeDuctRoutes", () => {
     expect(analysis.systems.fanPressure.exhaustFanPressurePa).toBeCloseTo(224.210511, 6);
   });
 
+  it("builds joined critical routes that match fan pressure summaries", () => {
+    const analysis = analyzeDuctRoutes(createAirHandlingLoopNetwork());
+
+    expect(analysis.supplySideCriticalRoute).toEqual(
+      expect.objectContaining({
+        side: "supply",
+        startTerminalId: "terminal-outdoor",
+        endTerminalId: "terminal-supply-room",
+        nodePath: ["node-outdoor", "node-ahu", "node-supply"],
+        componentIds: [
+          "terminal-outdoor",
+          "duct-outdoor-main",
+          "ahu-1",
+          "duct-supply-main",
+          "terminal-supply-room"
+        ],
+        totalPressureLossPa: analysis.systems.fanPressure.supplyFanPressurePa
+      })
+    );
+    expect(analysis.extractSideCriticalRoute).toEqual(
+      expect.objectContaining({
+        side: "extract",
+        startTerminalId: "terminal-exhaust-room",
+        endTerminalId: "terminal-exhaust-air",
+        nodePath: ["node-exhaust", "node-ahu", "node-exhaust-air"],
+        componentIds: [
+          "terminal-exhaust-room",
+          "duct-exhaust-main",
+          "ahu-1",
+          "duct-exhaust-air-main",
+          "terminal-exhaust-air"
+        ],
+        totalPressureLossPa: analysis.systems.fanPressure.exhaustFanPressurePa
+      })
+    );
+    expect(
+      analysis.supplySideCriticalRoute?.componentIds.filter(
+        (componentId) => componentId === "ahu-1"
+      )
+    ).toHaveLength(1);
+    expect(
+      analysis.extractSideCriticalRoute?.componentIds.filter(
+        (componentId) => componentId === "ahu-1"
+      )
+    ).toHaveLength(1);
+  });
+
+  it("returns null joined critical routes when matching endpoint paths are missing", () => {
+    const analysis = analyzeDuctRoutes(createSampleDuctNetwork());
+
+    expect(analysis.supplySideCriticalRoute).toBeNull();
+    expect(analysis.extractSideCriticalRoute).toBeNull();
+  });
+
   it("adds AHU and terminal pressure losses to route totals and fan pressure", () => {
     const analysis = analyzeDuctRoutes(createCustomComponentLossNetwork());
     const supplyRoute = analysis.systems.supply.criticalPath;

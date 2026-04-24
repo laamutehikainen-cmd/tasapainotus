@@ -56,6 +56,15 @@ export interface FanPressureSummary {
   exhaustFanPressurePa: number | null;
 }
 
+export interface JoinedCriticalRoute {
+  side: "supply" | "extract";
+  startTerminalId: string;
+  endTerminalId: string;
+  nodePath: string[];
+  componentIds: string[];
+  totalPressureLossPa: number;
+}
+
 export interface RouteSystemsSummary {
   supply: RouteSystemSummary;
   exhaust: RouteSystemSummary;
@@ -70,6 +79,8 @@ export interface RouteAnalysisResult {
   criticalPath: TerminalRouteResult | null;
   automaticFittings: AutomaticFittingResult[];
   systems: RouteSystemsSummary;
+  supplySideCriticalRoute: JoinedCriticalRoute | null;
+  extractSideCriticalRoute: JoinedCriticalRoute | null;
   balancing: BalancingAnalysisResult;
 }
 
@@ -105,6 +116,18 @@ export function analyzeDuctRoutes(
   const criticalPath = findCriticalPath(routes);
   const systems = createRouteSystemsSummary(routes);
   const automaticFittings = createUniqueAutomaticFittings(routes);
+  const supplySideCriticalRoute = createJoinedCriticalRoute(
+    "supply",
+    systems.outdoor.criticalPath,
+    systems.supply.criticalPath,
+    systems.fanPressure.supplyFanPressurePa
+  );
+  const extractSideCriticalRoute = createJoinedCriticalRoute(
+    "extract",
+    systems.exhaust.criticalPath,
+    systems.exhaustAir.criticalPath,
+    systems.fanPressure.exhaustFanPressurePa
+  );
 
   return {
     networkPerformance,
@@ -112,6 +135,8 @@ export function analyzeDuctRoutes(
     criticalPath,
     automaticFittings,
     systems,
+    supplySideCriticalRoute,
+    extractSideCriticalRoute,
     balancing: analyzeRouteBalancing(graph, routes, options)
   };
 }
@@ -231,6 +256,28 @@ function createRouteSystemSummary(
       (sum, route) => sum + route.designFlowRateLps,
       0
     )
+  };
+}
+
+function createJoinedCriticalRoute(
+  side: JoinedCriticalRoute["side"],
+  startRoute: TerminalRouteResult | null,
+  endRoute: TerminalRouteResult | null,
+  totalPressureLossPa: number | null
+): JoinedCriticalRoute | null {
+  if (!startRoute || !endRoute || totalPressureLossPa === null) {
+    return null;
+  }
+
+  return {
+    side,
+    startTerminalId: startRoute.terminalId,
+    endTerminalId: endRoute.terminalId,
+    nodePath: [...startRoute.nodePath].reverse().concat(endRoute.nodePath.slice(1)),
+    componentIds: [...startRoute.componentIds]
+      .reverse()
+      .concat(endRoute.componentIds.slice(1)),
+    totalPressureLossPa
   };
 }
 
