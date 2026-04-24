@@ -6,7 +6,8 @@ import {
   type DuctAhuConnection,
   type DuctSegmentComponent,
   type NetworkComponent,
-  type TerminalDeviceComponent
+  type TerminalDeviceComponent,
+  type TerminalDeviceType
 } from "../components";
 import type { AutomaticFittingOverride } from "../calc";
 import type { AhuPortType } from "../airSystems";
@@ -14,6 +15,11 @@ import { clonePoint3D, type Point3D } from "../core/geometry";
 import { DuctNetworkGraph } from "../core/graph";
 import { createNode, type DuctNode } from "../core/nodes";
 import { createPointKey, snapPointToGrid } from "../core/snapping";
+import {
+  normalizeRoundDuctDiameterMm,
+  type StandardRoundDuctDiameterMm
+} from "../data/ductSizes";
+import { DEFAULT_TERMINAL_REFERENCE_PRESSURE_LOSS_PA } from "../data/defaultTerminalPressureLosses";
 
 export type ToolMode =
   | "select"
@@ -51,7 +57,13 @@ export interface EditorDocument {
   nodes: DuctNode[];
   components: NetworkComponent[];
   automaticFittingOverrides: AutomaticFittingOverride[];
+  settings: EditorSettings;
   nextSequence: number;
+}
+
+export interface EditorSettings {
+  activeDuctDiameterMm: StandardRoundDuctDiameterMm;
+  defaultTerminalReferencePressureLossPa: Record<TerminalDeviceType, number>;
 }
 
 export interface EditorMutationResult {
@@ -64,7 +76,17 @@ export function createInitialEditorDocument(): EditorDocument {
     nodes: [],
     components: [],
     automaticFittingOverrides: [],
+    settings: createInitialEditorSettings(),
     nextSequence: 1
+  };
+}
+
+export function createInitialEditorSettings(): EditorSettings {
+  return {
+    activeDuctDiameterMm: 160,
+    defaultTerminalReferencePressureLossPa: {
+      ...DEFAULT_TERMINAL_REFERENCE_PRESSURE_LOSS_PA
+    }
   };
 }
 
@@ -161,7 +183,7 @@ export function completeDuctDraft(
         id: ductId,
         startNodeId: startNodeResult.nodeId,
         endNodeId: endNodeResult.nodeId,
-        diameterMm: 250,
+        diameterMm: workingDocument.settings.activeDuctDiameterMm,
         lengthMeters: calculatePlanarDistanceMeters(
           draft.startRenderPosition ?? draft.startPosition,
           anchor?.renderPosition ?? snappedEndPosition
@@ -304,6 +326,97 @@ export function removeAutomaticFittingOverrideFromDocument(
   });
 }
 
+export function updateActiveDuctDiameterInDocument(
+  document: EditorDocument,
+  value: number
+): EditorDocument {
+  return finalizeDocument({
+    ...document,
+    settings: {
+      ...document.settings,
+      activeDuctDiameterMm: normalizeRoundDuctDiameterMm(value)
+    }
+  });
+}
+
+export function updateDefaultTerminalReferencePressureLossInDocument(
+  document: EditorDocument,
+  terminalType: TerminalDeviceType,
+  value: number
+): EditorDocument {
+  if (!Number.isFinite(value) || value <= 0) {
+    return document;
+  }
+
+  return finalizeDocument({
+    ...document,
+    settings: {
+      ...document.settings,
+      defaultTerminalReferencePressureLossPa: {
+        ...document.settings.defaultTerminalReferencePressureLossPa,
+        [terminalType]: value
+      }
+    },
+    components: document.components.map((component) =>
+      component.type === "terminal" &&
+      component.metadata.terminalType === terminalType &&
+      component.metadata.referencePressureLossSource === "default"
+        ? {
+            ...component,
+            metadata: {
+              ...component.metadata,
+              referencePressureLossPa: value
+            }
+          }
+        : component
+    )
+  });
+}
+
+export function updateTerminalReferencePressureLossInDocument(
+  document: EditorDocument,
+  terminalId: string,
+  value: number
+): EditorDocument {
+  if (!Number.isFinite(value) || value <= 0) {
+    return document;
+  }
+
+  return updateComponentInDocument(document, terminalId, (component) =>
+    component.type === "terminal"
+      ? {
+          ...component,
+          metadata: {
+            ...component.metadata,
+            referencePressureLossPa: value,
+            referencePressureLossSource: "override"
+          }
+        }
+      : component
+  );
+}
+
+export function resetTerminalReferencePressureLossInDocument(
+  document: EditorDocument,
+  terminalId: string
+): EditorDocument {
+  return updateComponentInDocument(document, terminalId, (component) =>
+    component.type === "terminal"
+      ? {
+          ...component,
+          metadata: {
+            ...component.metadata,
+            referencePressureLossPa:
+              document.settings.defaultTerminalReferencePressureLossPa[
+                component.metadata.terminalType
+              ],
+            referencePressureLossSource: "default"
+          }
+        }
+      : component
+  );
+}
+
 function placeAhuAtPoint(
   document: EditorDocument,
   position: Point3D
@@ -359,6 +472,11 @@ function placeTerminalAtPoint(
         nodeId: nodeResult.nodeId,
         terminalType,
         designFlowRateLps: 200,
+        referencePressureLossPa:
+          nodeResult.document.settings.defaultTerminalReferencePressureLossPa[
+            terminalType
+          ],
+        referencePressureLossSource: "default",
         label: createTerminalLabel(terminalType, nodeResult.document.nextSequence)
       })
     ]
@@ -646,7 +764,9 @@ function ensureNoEndpointComponentAtNode(
 }
 
 function finalizeDocument(document: EditorDocument): EditorDocument {
-  const synchronizedDocument = synchronizeDerivedTerminalFlows(document);
+  const synchronizedDocument = synchronizeDefaultTerminalReferenceLosses(
+    synchronizeDerivedTerminalFlows(document)
+  );
   const referencedNodeIds = new Set(
     synchronizedDocument.components.flatMap((component) => [...component.nodeIds])
   );
@@ -674,6 +794,29 @@ function finalizeDocument(document: EditorDocument): EditorDocument {
         ...node,
         kind: endpointNodeIds.has(node.id) ? "endpoint" : "junction"
       }))
+  };
+}
+
+function synchronizeDefaultTerminalReferenceLosses(
+  document: EditorDocument
+): EditorDocument {
+  return {
+    ...document,
+    components: document.components.map((component) =>
+      component.type === "terminal" &&
+      component.metadata.referencePressureLossSource === "default"
+        ? {
+            ...component,
+            metadata: {
+              ...component.metadata,
+              referencePressureLossPa:
+                document.settings.defaultTerminalReferencePressureLossPa[
+                  component.metadata.terminalType
+                ]
+            }
+          }
+        : component
+    )
   };
 }
 
