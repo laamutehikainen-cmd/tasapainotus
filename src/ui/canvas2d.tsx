@@ -463,7 +463,9 @@ export function Canvas2D({
         <g className="canvas-joined-route-highlights" aria-hidden="true">
           {document.components
             .filter(
-              (component) =>
+              (
+                component
+              ): component is Extract<NetworkComponent, { type: "ductSegment" }> =>
                 component.type === "ductSegment" &&
                 joinedCriticalComponentIdSet.has(component.id)
             )
