@@ -6,7 +6,8 @@ import {
   buildGraphFromEditorDocument,
   completeDuctDraft,
   createInitialEditorDocument,
-  placeComponentAtPoint
+  placeComponentAtPoint,
+  updateComponentInDocument
 } from "../ui/editorState";
 import { buildView3DSceneData } from "./scene";
 
@@ -230,5 +231,99 @@ describe("buildView3DSceneData", () => {
         (duct) => Math.abs(duct.start.x - 4) > 0.1 || Math.abs(duct.start.y - 4) > 0.1
       )
     ).toHaveLength(4);
+  });
+
+  it("tracks fan state and flow direction for each air system", () => {
+    let document = createInitialEditorDocument();
+
+    document = placeComponentAtPoint(document, "ahu", { x: 4, y: 4, z: 0 }).document;
+    document = updateComponentInDocument(document, "ahu-2", (component) =>
+      component.type === "ahu"
+        ? {
+            ...component,
+            metadata: {
+              ...component.metadata,
+              fanRunning: true
+            }
+          }
+        : component
+    );
+    document = placeComponentAtPoint(document, "supplyTerminal", { x: 8, y: 4, z: 0 }).document;
+    document = placeComponentAtPoint(document, "exhaustTerminal", { x: 4, y: 1, z: 0 }).document;
+    document = placeComponentAtPoint(document, "outdoorTerminal", { x: 1, y: 4, z: 0 }).document;
+    document = placeComponentAtPoint(document, "exhaustAirTerminal", { x: 4, y: 7, z: 0 }).document;
+
+    const ahu = document.components.find((component) => component.type === "ahu");
+    const ahuNode = document.nodes.find((node) => node.id === ahu?.nodeIds[0]);
+
+    expect(ahu?.type).toBe("ahu");
+    expect(ahuNode).toBeDefined();
+
+    const ports = new Map(
+      getAhuPortAnchors(
+        ahu!,
+        ahuNode!.position,
+        DEFAULT_AHU_PORT_OFFSET_METERS
+      ).map((port) => [port.portType, port])
+    );
+
+    let draft = beginDuctDraft(document, { x: 4, y: 4, z: 0 }, {
+      renderPosition: ports.get("supply")!.position,
+      ahuConnection: {
+        componentId: ahu!.id,
+        nodeId: ahuNode!.id,
+        portType: "supply"
+      }
+    });
+    document = completeDuctDraft(document, draft, { x: 8, y: 4, z: 0 }).document;
+    draft = beginDuctDraft(document, { x: 4, y: 4, z: 0 }, {
+      renderPosition: ports.get("extract")!.position,
+      ahuConnection: {
+        componentId: ahu!.id,
+        nodeId: ahuNode!.id,
+        portType: "extract"
+      }
+    });
+    document = completeDuctDraft(document, draft, { x: 4, y: 1, z: 0 }).document;
+    draft = beginDuctDraft(document, { x: 4, y: 4, z: 0 }, {
+      renderPosition: ports.get("outdoor")!.position,
+      ahuConnection: {
+        componentId: ahu!.id,
+        nodeId: ahuNode!.id,
+        portType: "outdoor"
+      }
+    });
+    document = completeDuctDraft(document, draft, { x: 1, y: 4, z: 0 }).document;
+    draft = beginDuctDraft(document, { x: 4, y: 4, z: 0 }, {
+      renderPosition: ports.get("exhaust")!.position,
+      ahuConnection: {
+        componentId: ahu!.id,
+        nodeId: ahuNode!.id,
+        portType: "exhaust"
+      }
+    });
+    document = completeDuctDraft(document, draft, { x: 4, y: 7, z: 0 }).document;
+
+    const graph = buildGraphFromEditorDocument(document);
+    const analysis = analyzeDuctRoutes(graph);
+    const sceneData = buildView3DSceneData(
+      document,
+      analysis,
+      deriveDuctAirSystemLookup(document, analysis)
+    );
+    const supplyDuct = sceneData.ducts.find((duct) => duct.airSystem === "supply");
+    const extractDuct = sceneData.ducts.find((duct) => duct.airSystem === "extract");
+    const outdoorDuct = sceneData.ducts.find((duct) => duct.airSystem === "outdoor");
+    const exhaustDuct = sceneData.ducts.find((duct) => duct.airSystem === "exhaust");
+
+    expect(sceneData.fanRunning).toBe(true);
+    expect(supplyDuct?.flowStart).toEqual(supplyDuct?.start);
+    expect(supplyDuct?.flowEnd).toEqual(supplyDuct?.end);
+    expect(exhaustDuct?.flowStart).toEqual(exhaustDuct?.start);
+    expect(exhaustDuct?.flowEnd).toEqual(exhaustDuct?.end);
+    expect(extractDuct?.flowStart).toEqual(extractDuct?.end);
+    expect(extractDuct?.flowEnd).toEqual(extractDuct?.start);
+    expect(outdoorDuct?.flowStart).toEqual(outdoorDuct?.end);
+    expect(outdoorDuct?.flowEnd).toEqual(outdoorDuct?.start);
   });
 });

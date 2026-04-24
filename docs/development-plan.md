@@ -43,6 +43,7 @@ The current foundation already includes:
 * duct size selection for new drafts
 * terminal reference pressure losses
 * AHU device pressure loss and stored fan running state
+* 3D flow animation tied to AHU fan state
 * GitHub Pages deployment
 
 ### Current System Terms
@@ -330,27 +331,31 @@ Completed active duct-size selection, terminal reference pressure losses, AHU de
 
 Completed joined supply-side and extract-side critical routes with sidebar totals plus 2D and 3D highlights.
 
+### Phase 13 - Flow Animation
+
+Completed AHU-driven 3D airflow particles, terminal throw/intake visualization, and reduced-motion handling.
+
 ---
 
 ## 9. Next Development Phases
 
-### Phase 13 - Flow Animation
+### Phase 14 - Teaching Mode And Validation
 
 Goal:
-Give the teacher a start/stop particle animation that communicates airflow direction and terminal throw qualitatively.
+Give the teacher and students a cleaner teaching-focused view plus clearer warnings when the network is incomplete or contradictory.
 
 Tasks:
 
-* create a lightweight Three.js particle simulation
-* use AHU `fanRunning` to start and stop emitters
-* derive terminal throw distance from terminal pressure loss
-* respect reduced-motion preferences
+* add an optional teaching mode that hides low-value technical detail by default
+* add clearer warnings for disconnected terminals, missing AHU connections, and ambiguous mixed-system ducts
+* add example-focused helper copy for fan pressure, critical paths, and balancing results
+* make route and balancing panels easier to scan during projector use
 
 Acceptance Criteria:
 
-* starting the fan shows visible terminal streams within 1 s
-* stopping the fan fades streams out
-* supply, extract, outdoor, and exhaust behavior are visually distinct
+* teaching mode can declutter the workspace without changing the engineering model
+* incomplete networks surface clear user-facing warnings
+* projector use is improved through clearer hierarchy and less visual noise
 
 ---
 
@@ -376,13 +381,13 @@ Codex / developer must follow:
 
 Proceed in this order:
 
-1. Phase 13 - Flow Animation
+1. Phase 14 - Teaching Mode And Validation
 
-Do not start animation work before:
+Do not start this phase before:
 
-* duct-size selection is stable
-* AHU and terminal pressure losses flow into route calculations
-* joined critical route highlighting is in place in both 2D and 3D
+* joined critical route visualization is stable
+* 3D flow animation is stable
+* sidebar hierarchy changes are in place
 
 ---
 

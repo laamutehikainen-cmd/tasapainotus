@@ -1,6 +1,10 @@
 import * as THREE from "three";
 import type { RouteAnalysisResult } from "../calc";
-import { getAirSystemColor, type AirSystemType } from "../airSystems";
+import {
+  getAirSystemColor,
+  mapTerminalTypeToAirSystem,
+  type AirSystemType
+} from "../airSystems";
 import type {
   AhuComponent,
   DuctAhuConnection,
@@ -41,6 +45,8 @@ export interface View3DDuctDescriptor {
   id: string;
   start: Point3D;
   end: Point3D;
+  flowStart: Point3D | null;
+  flowEnd: Point3D | null;
   diameterMeters: number;
   isCritical: boolean;
   criticalSide: CriticalSide;
@@ -89,6 +95,7 @@ export interface View3DTerminalEndpointDescriptor {
     type: "terminal";
     markerSizeMeters: number;
     terminalType: TerminalDeviceType;
+    referencePressureLossPa: number;
   };
 }
 
@@ -100,6 +107,7 @@ export interface View3DSceneData {
   ducts: View3DDuctDescriptor[];
   endpoints: View3DEndpointDescriptor[];
   bounds: View3DBounds | null;
+  fanRunning: boolean;
 }
 
 export function buildView3DSceneData(
@@ -110,6 +118,7 @@ export function buildView3DSceneData(
   const criticalComponentIds = createCriticalComponentIdSets(analysis);
   const nodeById = new Map(document.nodes.map((node) => [node.id, node]));
   const connectedDuctsByNodeId = createConnectedDuctsByNodeId(document, nodeById);
+  const ductFlowDirections = createDuctFlowDirectionLookup(document, analysis);
   const endpoints: View3DEndpointDescriptor[] = [];
   const ductAnchorByEdgeKey = new Map<string, Point3D>();
 
@@ -165,15 +174,31 @@ export function buildView3DSceneData(
       if (!startNode || !endNode) {
         continue;
       }
+      const start =
+        ductAnchorByEdgeKey.get(createDuctAnchorKey(component.id, startNode.id)) ??
+        createElevatedPlanarPoint(startNode.position, DUCT_CENTERLINE_HEIGHT_METERS);
+      const end =
+        ductAnchorByEdgeKey.get(createDuctAnchorKey(component.id, endNode.id)) ??
+        createElevatedPlanarPoint(endNode.position, DUCT_CENTERLINE_HEIGHT_METERS);
+      const flowDirection = ductFlowDirections.get(component.id) ?? null;
+      const flowPoints = flowDirection
+        ? resolveDuctFlowPoints(
+            component.nodeIds[0],
+            flowDirection,
+            start,
+            end
+          )
+        : {
+            flowStart: null,
+            flowEnd: null
+          };
 
       ducts.push({
         id: component.id,
-        start:
-          ductAnchorByEdgeKey.get(createDuctAnchorKey(component.id, startNode.id)) ??
-          createElevatedPlanarPoint(startNode.position, DUCT_CENTERLINE_HEIGHT_METERS),
-        end:
-          ductAnchorByEdgeKey.get(createDuctAnchorKey(component.id, endNode.id)) ??
-          createElevatedPlanarPoint(endNode.position, DUCT_CENTERLINE_HEIGHT_METERS),
+        start,
+        end,
+        flowStart: flowPoints.flowStart,
+        flowEnd: flowPoints.flowEnd,
         diameterMeters: component.geometry.diameterMm / 1000,
         isCritical: getCriticalSide(component.id, criticalComponentIds) !== null,
         criticalSide: getCriticalSide(component.id, criticalComponentIds),
@@ -187,8 +212,115 @@ export function buildView3DSceneData(
   return {
     ducts,
     endpoints,
-    bounds: createBoundsFromSceneContent(ducts, endpoints)
+    bounds: createBoundsFromSceneContent(ducts, endpoints),
+    fanRunning: document.components.some(
+      (component) => component.type === "ahu" && component.metadata.fanRunning
+    )
   };
+}
+
+interface DuctFlowDirection {
+  fromNodeId: string;
+  toNodeId: string;
+}
+
+function createDuctFlowDirectionLookup(
+  document: EditorDocument,
+  analysis: RouteAnalysisResult | null
+): Map<string, DuctFlowDirection> {
+  if (!analysis) {
+    return new Map();
+  }
+
+  const ductIdByNodePair = createDuctIdByNodePairLookup(document);
+  const directionsByDuctId = new Map<string, DuctFlowDirection | null>();
+
+  for (const route of analysis.routes) {
+    const airSystem = mapTerminalTypeToAirSystem(route.terminalType);
+    const reverseDirection = airSystem === "extract" || airSystem === "outdoor";
+
+    for (let index = 0; index < route.nodePath.length - 1; index += 1) {
+      const routeFromNodeId = route.nodePath[index];
+      const routeToNodeId = route.nodePath[index + 1];
+      const ductId = ductIdByNodePair.get(
+        createNodePairKey(routeFromNodeId, routeToNodeId)
+      );
+
+      if (!ductId) {
+        continue;
+      }
+
+      const nextDirection = reverseDirection
+        ? {
+            fromNodeId: routeToNodeId,
+            toNodeId: routeFromNodeId
+          }
+        : {
+            fromNodeId: routeFromNodeId,
+            toNodeId: routeToNodeId
+          };
+      const previousDirection = directionsByDuctId.get(ductId);
+
+      if (
+        previousDirection &&
+        (previousDirection.fromNodeId !== nextDirection.fromNodeId ||
+          previousDirection.toNodeId !== nextDirection.toNodeId)
+      ) {
+        directionsByDuctId.set(ductId, null);
+      } else if (previousDirection !== null) {
+        directionsByDuctId.set(ductId, nextDirection);
+      }
+    }
+  }
+
+  return new Map(
+    [...directionsByDuctId.entries()].filter(
+      (entry): entry is [string, DuctFlowDirection] => entry[1] !== null
+    )
+  );
+}
+
+function createDuctIdByNodePairLookup(
+  document: EditorDocument
+): Map<string, string> {
+  const lookup = new Map<string, string>();
+
+  for (const component of document.components) {
+    if (component.type !== "ductSegment") {
+      continue;
+    }
+
+    lookup.set(
+      createNodePairKey(component.nodeIds[0], component.nodeIds[1]),
+      component.id
+    );
+  }
+
+  return lookup;
+}
+
+function createNodePairKey(firstNodeId: string, secondNodeId: string): string {
+  return [firstNodeId, secondNodeId].sort().join("::");
+}
+
+function resolveDuctFlowPoints(
+  firstNodeId: string,
+  flowDirection: DuctFlowDirection,
+  start: Point3D,
+  end: Point3D
+): {
+  flowStart: Point3D;
+  flowEnd: Point3D;
+} {
+  return flowDirection.fromNodeId === firstNodeId
+    ? {
+        flowStart: start,
+        flowEnd: end
+      }
+    : {
+        flowStart: end,
+        flowEnd: start
+      };
 }
 
 interface CriticalComponentIdSets {
@@ -619,7 +751,8 @@ function createTerminalDescriptor(
     geometry: {
       type: "terminal",
       markerSizeMeters: component.geometry.markerSizeMeters,
-      terminalType: component.metadata.terminalType
+      terminalType: component.metadata.terminalType,
+      referencePressureLossPa: component.metadata.referencePressureLossPa
     }
   };
 }

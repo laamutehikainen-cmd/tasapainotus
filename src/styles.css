@@ -241,6 +241,12 @@ body {
   font-size: 0.92rem;
 }
 
+.editor-stage-status span.status-running {
+  background: rgba(223, 245, 229, 0.96);
+  color: #235f28;
+  border: 1px solid rgba(46, 125, 50, 0.18);
+}
+
 .editor-canvas {
   width: 100%;
   margin-top: 1rem;
@@ -323,6 +329,11 @@ body {
 .legend-chip-extract-critical {
   background: rgba(255, 245, 209, 0.96);
   color: #7a5600;
+}
+
+.legend-chip-flow {
+  background: rgba(220, 238, 246, 0.96);
+  color: #23586c;
 }
 
 .canvas-surface {
