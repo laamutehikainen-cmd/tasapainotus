@@ -667,6 +667,14 @@ function renderAhuSymbol(
         x2={center.x + Math.cos((component.metadata.rotationDegrees * Math.PI) / 180) * (widthPx / 2 - 16)}
         y2={center.y + Math.sin((component.metadata.rotationDegrees * Math.PI) / 180) * (widthPx / 2 - 16)}
       />
+      {component.metadata.fanRunning ? (
+        <circle
+          cx={center.x}
+          cy={center.y}
+          r="14"
+          className="endpoint-ahu-fan-indicator"
+        />
+      ) : null}
       {ports.map((port) => {
         const portPoint = toCanvasPoint(port.position);
 

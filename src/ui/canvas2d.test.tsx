@@ -5,6 +5,7 @@ import {
   completeDuctDraft,
   createInitialEditorDocument,
   placeComponentAtPoint,
+  updateComponentInDocument,
   type EditorDocument
 } from "./editorState";
 import { Canvas2D } from "./canvas2d";
@@ -278,6 +279,39 @@ describe("Canvas2D", () => {
         })
       })
     );
+  });
+
+  it("shows a non-interactive AHU fan indicator when the fan is running", () => {
+    const document = updateComponentInDocument(
+      createDocumentWithEndpointAndJunction(),
+      "ahu-2",
+      (component) =>
+        component.type === "ahu"
+          ? {
+              ...component,
+              metadata: {
+                ...component.metadata,
+                fanRunning: true
+              }
+            }
+          : component
+    );
+    const { container } = render(
+      <Canvas2D
+        document={document}
+        automaticFittings={[]}
+        ductAirSystems={{}}
+        activeTool="select"
+        selection={null}
+        ductDraft={null}
+        hoverPoint={null}
+        onHoverPointChange={() => {}}
+        onCanvasPoint={() => {}}
+        onSelectionChange={() => {}}
+      />
+    );
+
+    expect(container.querySelector(".endpoint-ahu-fan-indicator")).not.toBeNull();
   });
 });
 

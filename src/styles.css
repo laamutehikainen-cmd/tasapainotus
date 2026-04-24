@@ -671,6 +671,13 @@ body {
   pointer-events: none;
 }
 
+.endpoint-ahu-fan-indicator {
+  fill: rgba(229, 103, 58, 0.24);
+  stroke: rgba(255, 255, 255, 0.9);
+  stroke-width: 2;
+  pointer-events: none;
+}
+
 .endpoint-ahu-port-dot {
   stroke: rgba(255, 255, 255, 0.95);
   stroke-width: 2.2;
