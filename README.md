@@ -4,14 +4,15 @@ Tasapainotus is a browser-based HVAC duct design and analysis tool for fast duct
 
 ## Current Status
 
-Phase 1 scaffold is in place:
+The current application now includes:
 
-* React + TypeScript app structure
-* Vite-based dev/build configuration
-* Vitest test configuration
-* Initial documentation
-* Source folders prepared for future phases
-* Local workspace toolchain wrappers for Node/npm and Git
+* graph-based 2D duct editing with 10 cm snapping
+* AHU and terminal placement with round standard ducts
+* pressure-loss calculations, critical paths, and balancing summaries
+* automatic fitting detection with editable zeta overrides
+* synchronized read-only 3D visualization
+* AHU-driven 3D airflow animation for teaching
+* local workspace toolchain wrappers for Node/npm and Git
 
 ## Getting Started
 

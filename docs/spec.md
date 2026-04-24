@@ -29,6 +29,7 @@ The current application supports:
 * critical-path identification
 * balancing-oriented comparison
 * read-only 3D visualization
+* AHU-driven 3D airflow animation for teaching
 
 ## System Terminology
 
@@ -52,11 +53,9 @@ The next version must improve the product specifically for teaching use and fast
 
 It should:
 
-* reduce repeated tool switching during drawing
-* make duct branching more automatic
-* make local losses visible and editable
-* improve AHU geometry handling
-* improve system clarity and terminology
+* reduce visual noise during teaching use
+* explain incomplete or invalid networks more clearly
+* make engineering results easier to present on a projector
 * support clearer instructional visualization
 
 ## Required Next Version Features
@@ -159,4 +158,3 @@ Before teaching animation or more advanced visualization expands further, the pr
 * editing workflow
 * fitting generation
 * local loss calculations
-
