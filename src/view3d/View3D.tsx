@@ -141,6 +141,7 @@ export function View3D({ document, analysis, ductAirSystems }: View3DProps) {
         <div className="viewer-legend">
           <span className="legend-chip">Blue: network</span>
           <span className="legend-chip legend-chip-critical">Orange: critical path</span>
+          <span className="legend-chip legend-chip-joined">Cyan: joined fan route</span>
           <span className="legend-chip">Read-only</span>
         </div>
       </div>

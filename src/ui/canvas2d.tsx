@@ -56,6 +56,7 @@ interface Canvas2DProps {
   document: EditorDocument;
   automaticFittings: AutomaticFittingResult[];
   ductAirSystems: Record<string, AirSystemType>;
+  joinedCriticalComponentIds?: string[];
   activeTool: ToolMode;
   selection: EditorSelection;
   ductDraft: DuctDraft | null;
@@ -71,6 +72,7 @@ export function Canvas2D({
   document,
   automaticFittings,
   ductAirSystems,
+  joinedCriticalComponentIds = [],
   activeTool,
   selection,
   ductDraft,
@@ -85,6 +87,7 @@ export function Canvas2D({
   const [isPanning, setIsPanning] = useState(false);
   const panSessionRef = useRef<PanSession | null>(null);
   const fittingsByNode = groupAutomaticFittingsByNode(automaticFittings);
+  const joinedCriticalComponentIdSet = new Set(joinedCriticalComponentIds);
   const viewBoxWidth =
     BASE_VIEWPORT_WIDTH_METERS * (1 / zoom) * CANVAS_SCALE_PX_PER_METER +
     CANVAS_PADDING_PX * 2;
@@ -457,6 +460,46 @@ export function Canvas2D({
             })}
         </g>
 
+        <g className="canvas-joined-route-highlights" aria-hidden="true">
+          {document.components
+            .filter(
+              (
+                component
+              ): component is Extract<NetworkComponent, { type: "ductSegment" }> =>
+                component.type === "ductSegment" &&
+                joinedCriticalComponentIdSet.has(component.id)
+            )
+            .map((component) => {
+              const startNode = findNode(document.nodes, component.nodeIds[0]);
+              const endNode = findNode(document.nodes, component.nodeIds[1]);
+
+              if (!startNode || !endNode) {
+                return null;
+              }
+
+              const { start, end } = getRenderedDuctCanvasEndpoints(
+                component,
+                startNode,
+                endNode,
+                document
+              );
+
+              return (
+                <line
+                  key={`joined-route-${component.id}`}
+                  x1={start.x}
+                  y1={start.y}
+                  x2={end.x}
+                  y2={end.y}
+                  className="joined-route-line"
+                  style={{
+                    strokeWidth: Math.max(8, component.geometry.diameterMm / 42)
+                  }}
+                />
+              );
+            })}
+        </g>
+
         <g className="canvas-fitting-highlights" aria-hidden="true">
           {document.nodes.map((node) => {
             const nodeFittings = fittingsByNode.get(node.id);
@@ -534,11 +577,17 @@ export function Canvas2D({
               const point = toCanvasPoint(node.position);
               const isSelected =
                 selection?.kind === "component" && selection.id === component.id;
+              const isJoinedCritical = joinedCriticalComponentIdSet.has(
+                component.id
+              );
 
               return (
                 <g
                   key={component.id}
-                  className={isSelected ? "endpoint-marker is-selected" : "endpoint-marker"}
+                  className={formatEndpointMarkerClassName(
+                    isSelected,
+                    isJoinedCritical
+                  )}
                   onPointerDown={(event) => {
                     handleAnchoredPointerDown(event, node.position, {
                       kind: "component",
@@ -855,6 +904,19 @@ function describeTool(tool: ToolMode): string {
     case "exhaustAirTerminal":
       return "Place exhaust air terminal";
   }
+}
+
+function formatEndpointMarkerClassName(
+  isSelected: boolean,
+  isJoinedCritical: boolean
+): string {
+  return [
+    "endpoint-marker",
+    isSelected ? "is-selected" : "",
+    isJoinedCritical ? "is-joined-critical" : ""
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function describeFittingType(

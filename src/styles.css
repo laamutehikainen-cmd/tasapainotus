@@ -8,6 +8,8 @@
   --line: rgba(22, 63, 85, 0.16);
   --accent: #e5673a;
   --accent-soft: #ffd4c6;
+  --joined-route: #19a8bb;
+  --joined-route-soft: #d8f5f8;
   --sea: #2c819c;
   --sea-soft: #d4eef3;
   --terminal: #134c5e;
@@ -303,6 +305,11 @@ body {
   color: #9f451f;
 }
 
+.legend-chip-joined {
+  background: rgba(216, 245, 248, 0.96);
+  color: #0f6976;
+}
+
 .canvas-surface {
   fill: rgba(255, 255, 255, 0.72);
 }
@@ -323,6 +330,19 @@ body {
 
 .duct-line.is-selected {
   stroke: rgba(229, 103, 58, 0.92);
+}
+
+.canvas-joined-route-highlights,
+.joined-route-line {
+  pointer-events: none;
+}
+
+.joined-route-line {
+  stroke: var(--joined-route);
+  stroke-linecap: round;
+  stroke-dasharray: 20 10;
+  opacity: 0.92;
+  filter: drop-shadow(0 0 4px rgba(25, 168, 187, 0.35));
 }
 
 .duct-hit-area {
@@ -572,9 +592,29 @@ body {
 }
 
 .route-system-list,
-.balancing-system-list {
+.balancing-system-list,
+.joined-critical-routes,
+.joined-route-grid {
   display: grid;
   gap: 1rem;
+}
+
+.joined-critical-routes {
+  margin-bottom: 0.85rem;
+}
+
+.joined-route-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.joined-route-card.is-joined-critical {
+  border-color: rgba(25, 168, 187, 0.36);
+  background: linear-gradient(180deg, rgba(216, 245, 248, 0.95), rgba(247, 252, 253, 0.95));
+  box-shadow: inset 0 0 0 1px rgba(25, 168, 187, 0.12);
+}
+
+.joined-route-card.is-empty {
+  background: rgba(255, 255, 255, 0.68);
 }
 
 .route-system-section,
@@ -724,6 +764,25 @@ body {
   stroke-linejoin: round;
 }
 
+.endpoint-marker.is-joined-critical .endpoint-ahu-shell,
+.endpoint-marker.is-joined-critical .endpoint-terminal-ring,
+.endpoint-marker.is-joined-critical .endpoint-air-ring {
+  stroke: var(--joined-route);
+  filter: drop-shadow(0 0 4px rgba(25, 168, 187, 0.28));
+}
+
+.endpoint-marker.is-joined-critical .endpoint-terminal-core,
+.endpoint-marker.is-joined-critical .endpoint-terminal-detail,
+.endpoint-marker.is-joined-critical .endpoint-air-arrow {
+  fill: var(--joined-route);
+  stroke: var(--joined-route);
+}
+
+.endpoint-marker.is-joined-critical .endpoint-ahu-port-dot {
+  stroke: var(--joined-route-soft);
+  stroke-width: 3;
+}
+
 .endpoint-marker.is-selected .endpoint-ahu-shell,
 .endpoint-marker.is-selected .endpoint-terminal-ring,
 .endpoint-marker.is-selected .endpoint-air-ring {
@@ -782,6 +841,7 @@ body {
   }
 
   .fan-summary-grid,
+  .joined-route-grid,
   .property-metric-grid {
     grid-template-columns: 1fr;
   }

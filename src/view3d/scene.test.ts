@@ -207,6 +207,15 @@ describe("buildView3DSceneData", () => {
     expect(portsBySystem.get("outdoor")?.direction).toEqual({ x: -1, y: 0, z: 0 });
     expect(portsBySystem.get("extract")?.direction).toEqual({ x: 0, y: -1, z: 0 });
     expect(portsBySystem.get("exhaust")?.direction).toEqual({ x: 0, y: 1, z: 0 });
+    expect(ahuEndpoint.isJoinedCritical).toBe(true);
+    expect(
+      sceneData.endpoints.filter((endpoint) => endpoint.isJoinedCritical)
+    ).toHaveLength(5);
+    expect(sceneData.ducts.every((duct) => duct.isJoinedCritical)).toBe(true);
+    expect(portsBySystem.get("supply")?.isJoinedCritical).toBe(true);
+    expect(portsBySystem.get("outdoor")?.isJoinedCritical).toBe(true);
+    expect(portsBySystem.get("extract")?.isJoinedCritical).toBe(true);
+    expect(portsBySystem.get("exhaust")?.isJoinedCritical).toBe(true);
     expect(
       sceneData.ducts.filter(
         (duct) => Math.abs(duct.start.x - 4) > 0.1 || Math.abs(duct.start.y - 4) > 0.1

@@ -195,6 +195,8 @@ export function Sidebar({
               </article>
             </div>
 
+            <JoinedCriticalRoutesSection analysis={analysis} />
+
             <div className="route-system-list">
               <RouteSystemSection
                 summary={analysis.systems.supply}
@@ -250,6 +252,88 @@ export function Sidebar({
         )}
       </section>
     </aside>
+  );
+}
+
+interface JoinedCriticalRoutesSectionProps {
+  analysis: RouteAnalysisResult;
+}
+
+function JoinedCriticalRoutesSection({
+  analysis
+}: JoinedCriticalRoutesSectionProps) {
+  return (
+    <section
+      className="joined-critical-routes"
+      aria-label="Joined critical routes"
+    >
+      <div className="route-system-header">
+        <strong>Joined critical routes</strong>
+        <span>Fan-side end-to-end paths</span>
+      </div>
+      <div className="joined-route-grid">
+        <JoinedCriticalRouteCard
+          title="Supply side"
+          route={analysis.supplySideCriticalRoute}
+          routes={analysis.routes}
+          emptyMessage="Add both Outdoor air and Supply routes to show Outdoor -> AHU -> Supply."
+        />
+        <JoinedCriticalRouteCard
+          title="Extract side"
+          route={analysis.extractSideCriticalRoute}
+          routes={analysis.routes}
+          emptyMessage="Add both Extract air and Exhaust routes to show Extract -> AHU -> Exhaust."
+        />
+      </div>
+    </section>
+  );
+}
+
+interface JoinedCriticalRouteCardProps {
+  title: string;
+  route: RouteAnalysisResult["supplySideCriticalRoute"];
+  routes: RouteAnalysisResult["routes"];
+  emptyMessage: string;
+}
+
+function JoinedCriticalRouteCard({
+  title,
+  route,
+  routes,
+  emptyMessage
+}: JoinedCriticalRouteCardProps) {
+  if (!route) {
+    return (
+      <article className="route-card joined-route-card is-empty">
+        <header>
+          <strong>{title}</strong>
+          <strong>N/A</strong>
+        </header>
+        <p>{emptyMessage}</p>
+      </article>
+    );
+  }
+
+  return (
+    <article className="route-card joined-route-card is-joined-critical">
+      <header>
+        <strong>{title}</strong>
+        <strong>{formatPressure(route.totalPressureLossPa)}</strong>
+      </header>
+      <div className="route-meta-row">
+        <span className="route-type-chip">
+          {formatTerminalLabel(routes, route.startTerminalId)}
+        </span>
+        <span>to</span>
+        <span className="route-type-chip">
+          {formatTerminalLabel(routes, route.endTerminalId)}
+        </span>
+      </div>
+      <span>
+        {route.nodePath.length - 1} spans, {route.componentIds.length} components
+      </span>
+      <p>{route.componentIds.join(" -> ")}</p>
+    </article>
   );
 }
 
@@ -430,6 +514,13 @@ function describeTerminalType(
 
 function formatPressure(value: number | null | undefined): string {
   return value === null || value === undefined ? "N/A" : `${value.toFixed(2)} Pa`;
+}
+
+function formatTerminalLabel(
+  routes: RouteAnalysisResult["routes"],
+  terminalId: string
+): string {
+  return routes.find((route) => route.terminalId === terminalId)?.terminalLabel ?? terminalId;
 }
 
 function formatFanPressureFormula(
