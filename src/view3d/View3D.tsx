@@ -25,6 +25,7 @@ interface View3DRuntime {
   cameraRig: OrbitCameraRig;
   rendererHandle: View3DRendererHandle;
   animationFrameId: number;
+  resizeObserver: ResizeObserver | null;
   resize: () => void;
 }
 
@@ -53,21 +54,31 @@ export function View3D({ document, analysis, ductAirSystems }: View3DProps) {
       const scene = createView3DScene();
       const rendererHandle = createView3DRenderer(host);
       const cameraRig = createOrbitCamera(rendererHandle.renderer.domElement);
+      const resize = () => {
+        const bounds = host.getBoundingClientRect();
+        const width = Math.round(bounds.width || host.clientWidth || 320);
+        const height = Math.round(bounds.height || host.clientHeight || 320);
+
+        rendererHandle.resize(width, height);
+        cameraRig.resize(width, height);
+      };
+      const resizeObserver =
+        typeof ResizeObserver === "undefined"
+          ? null
+          : new ResizeObserver(() => {
+              resize();
+            });
       const runtime: View3DRuntime = {
         scene,
         cameraRig,
         rendererHandle,
         animationFrameId: 0,
-        resize: () => {
-          const width = host.clientWidth || 320;
-          const height = host.clientHeight || 320;
-
-          rendererHandle.resize(width, height);
-          cameraRig.resize(width, height);
-        }
+        resizeObserver,
+        resize
       };
 
       runtime.resize();
+      runtime.resizeObserver?.observe(host);
       syncView3DScene(scene, sceneData);
       cameraRig.focus(sceneData.bounds);
 
@@ -85,6 +96,7 @@ export function View3D({ document, analysis, ductAirSystems }: View3DProps) {
       return () => {
         window.removeEventListener("resize", runtime.resize);
         window.cancelAnimationFrame(runtime.animationFrameId);
+        runtime.resizeObserver?.disconnect();
         runtimeRef.current = null;
         cameraRig.dispose();
         disposeView3DScene(scene);
