@@ -91,7 +91,7 @@ export function Controls({
     <section className="tool-panel" aria-label="Editor tools">
       <div className="tool-panel-header">
         <div>
-          <p className="section-kicker">Phase 8</p>
+          <p className="section-kicker">Editor tools</p>
           <h2>Editing Workflow</h2>
         </div>
         <div className="tool-panel-actions">
