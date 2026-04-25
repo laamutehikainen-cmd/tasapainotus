@@ -763,7 +763,8 @@ body {
 }
 
 .balance-group-list,
-.balance-branch-list {
+.balance-branch-list,
+.balance-terminal-list {
   display: grid;
   gap: 0.8rem;
 }
@@ -787,6 +788,37 @@ body {
 .balance-branch-metrics {
   display: grid;
   gap: 0.2rem;
+}
+
+.balance-terminal-card {
+  padding: 0.85rem 0.9rem;
+  border-radius: 16px;
+  border: 1px solid rgba(17, 46, 59, 0.08);
+  background: rgba(255, 255, 255, 0.72);
+  display: grid;
+  gap: 0.35rem;
+}
+
+.balance-terminal-card header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.balance-terminal-card strong {
+  font-size: 1.02rem;
+}
+
+.balance-terminal-card p {
+  margin: 0;
+  color: #35596b;
+  font-size: 0.92rem;
+}
+
+.balance-terminal-card span {
+  color: var(--muted);
+  font-size: 0.9rem;
 }
 
 .endpoint-ahu-shell {
