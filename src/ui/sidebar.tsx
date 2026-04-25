@@ -1,6 +1,5 @@
 import type {
   AutomaticFittingResult,
-  BalancingSystemResult,
   ComponentPerformanceResult,
   RouteAnalysisResult,
   RouteSystemSummary
@@ -236,13 +235,13 @@ export function Sidebar({
           <div className="balancing-system-list">
             <BalancingSystemSection
               title="Supply balancing"
-              result={analysis.balancing.supply}
-              emptyMessage="Supply branch comparisons appear when two or more supply routes split in parallel."
+              summary={analysis.systems.supply}
+              emptyMessage="Connected supply terminals appear here with terminal-level balancing targets."
             />
             <BalancingSystemSection
-              result={analysis.balancing.exhaust}
+              summary={analysis.systems.exhaust}
               title="Extract air balancing"
-              emptyMessage="Extract air branch comparisons appear when two or more extract air routes split in parallel."
+              emptyMessage="Connected extract air terminals appear here with terminal-level balancing targets."
             />
           </div>
         ) : (
@@ -410,107 +409,87 @@ function RouteSystemSection({
 
 interface BalancingSystemSectionProps {
   title: string;
-  result: BalancingSystemResult;
+  summary: RouteSystemSummary;
   emptyMessage: string;
 }
 
 function BalancingSystemSection({
   title,
-  result,
+  summary,
   emptyMessage
 }: BalancingSystemSectionProps) {
+  const entries = createTerminalBalancingEntries(summary);
+  const referenceEntry = entries.find((entry) => entry.isReference) ?? null;
+  const adjustableEntries = entries.filter((entry) => !entry.isReference);
+  const requiresBalancing = adjustableEntries.some(
+    (entry) => entry.additionalPressureLossPa > 0.001
+  );
+
   return (
     <section className="balancing-system-section">
       <div className="route-system-header">
         <strong>{title}</strong>
-        <span>{result.branchGroups.length} groups</span>
+        <span>{summary.routes.length} terminals</span>
       </div>
 
-      <article
-        className={
-          result.requiresBalancing
-            ? "balance-summary balance-summary-warning"
-            : "balance-summary balance-summary-ok"
-        }
-      >
-        <span>
-          {result.requiresBalancing
-            ? "Balancing suggested"
-            : "Branches within tolerance"}
-        </span>
-        <strong>{result.maxPressureDifferencePa.toFixed(2)} Pa</strong>
-        <p>
-          {result.requiresBalancing
-            ? "Lighter branches need extra resistance. The reference branch (highest loss) needs no change - add resistance to the others."
-            : "All parallel branches are within tolerance - no extra resistance needed."}
-        </p>
-      </article>
+      {referenceEntry ? (
+        <>
+          <article
+            className={
+              requiresBalancing
+                ? "balance-summary balance-summary-warning"
+                : "balance-summary balance-summary-ok"
+            }
+          >
+            <span>Hardest route</span>
+            <strong>{referenceEntry.terminalLabel}</strong>
+            <p>
+              Hardest route total pressure loss:{" "}
+              {referenceEntry.routePressureLossPa.toFixed(2)} Pa
+            </p>
+            <p>
+              Terminal pressure loss:{" "}
+              {referenceEntry.currentTerminalPressureLossPa.toFixed(2)} Pa
+            </p>
+          </article>
 
-      {result.branchGroups.length > 0 ? (
-        <details className="collapsible-section balance-details">
-          <summary className="route-system-header collapsible-summary">
-            <strong>Branch details</strong>
-            <span>{result.branchGroups.length} groups</span>
-          </summary>
-          <div className="balance-group-list">
-            {result.branchGroups.map((group) => (
-              <article
-                key={group.nodeId}
-                className={
-                  group.requiresBalancing
-                    ? "balance-group balance-group-warning"
-                    : "balance-group"
-                }
-              >
-                <header>
-                  <div>
-                    <strong>{group.nodeLabel}</strong>
-                    <span>
-                      {group.branchCount} branches, {group.terminalCount} terminals
-                    </span>
-                  </div>
-                  <strong>{group.imbalancePa.toFixed(2)} Pa</strong>
-                </header>
-                <p>
-                  Tolerance {group.tolerancePa.toFixed(2)} Pa, reference{" "}
-                  {group.referencePressureLossPa.toFixed(2)} Pa
-                </p>
-                <p className="property-help">
-                  Branch with highest loss sets the reference. Others need extra
-                  resistance to match it.
-                </p>
-                <div className="balance-branch-list">
-                  {group.branches.map((branch) => (
-                    <div key={branch.branchNodeId} className="balance-branch">
-                      <div>
-                        <strong>{branch.branchLabel}</strong>
-                        <span>
-                          {branch.representativeTerminalLabel}
-                          {branch.terminalIds.length > 1
-                            ? ` (${branch.terminalIds.length} terminals)`
-                            : ""}
-                        </span>
-                      </div>
-                      <div className="balance-branch-metrics">
-                        <strong>{branch.downstreamPressureLossPa.toFixed(2)} Pa</strong>
-                        <span>
-                          {branch.suggestedAdditionalLossPa > 0
-                            ? `+ ${branch.suggestedAdditionalLossPa.toFixed(2)} Pa resistance`
-                            : "Reference (hardest)"}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </article>
-            ))}
-          </div>
-        </details>
+          {adjustableEntries.length > 0 ? (
+            <div className="balance-terminal-list">
+              {adjustableEntries.map((entry) => (
+                <article key={entry.terminalId} className="balance-terminal-card">
+                  <header>
+                    <strong>{entry.terminalLabel}</strong>
+                    <strong>{entry.neededTerminalPressureLossPa.toFixed(2)} Pa</strong>
+                  </header>
+                  <p>Needed terminal pressure loss</p>
+                  <span>
+                    Current route {entry.routePressureLossPa.toFixed(2)} Pa, add{" "}
+                    {entry.additionalPressureLossPa.toFixed(2)} Pa at terminal
+                  </span>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="sidebar-empty">
+              Only one connected terminal route - no balancing adjustment needed.
+            </p>
+          )}
+        </>
       ) : (
         <p className="sidebar-empty">{emptyMessage}</p>
       )}
     </section>
   );
+}
+
+interface TerminalBalancingEntry {
+  terminalId: string;
+  terminalLabel: string;
+  routePressureLossPa: number;
+  currentTerminalPressureLossPa: number;
+  neededTerminalPressureLossPa: number;
+  additionalPressureLossPa: number;
+  isReference: boolean;
 }
 
 function describeTerminalType(
@@ -582,4 +561,55 @@ function findSharedAhuPressureLossPa(
   );
 
   return sharedAhu?.pressureLossPa ?? 0;
+}
+
+function createTerminalBalancingEntries(
+  summary: RouteSystemSummary
+): TerminalBalancingEntry[] {
+  const criticalPath = summary.criticalPath;
+
+  if (!criticalPath) {
+    return [];
+  }
+
+  return [...summary.routes]
+    .map((route) => {
+      const currentTerminalPressureLossPa = getRouteTerminalPressureLossPa(route);
+      const additionalPressureLossPa = Number(
+        Math.max(0, criticalPath.totalPressureLossPa - route.totalPressureLossPa).toFixed(2)
+      );
+
+      return {
+        terminalId: route.terminalId,
+        terminalLabel: route.terminalLabel,
+        routePressureLossPa: route.totalPressureLossPa,
+        currentTerminalPressureLossPa,
+        neededTerminalPressureLossPa: Number(
+          (currentTerminalPressureLossPa + additionalPressureLossPa).toFixed(2)
+        ),
+        additionalPressureLossPa,
+        isReference: route.terminalId === criticalPath.terminalId
+      };
+    })
+    .sort((left, right) => {
+      if (left.isReference) {
+        return -1;
+      }
+
+      if (right.isReference) {
+        return 1;
+      }
+
+      return right.routePressureLossPa - left.routePressureLossPa;
+    });
+}
+
+function getRouteTerminalPressureLossPa(
+  route: RouteSystemSummary["routes"][number]
+): number {
+  const terminalComponent = route.componentBreakdown.find(
+    (item) => item.componentType === "terminal"
+  );
+
+  return Number((terminalComponent?.pressureLossPa ?? 0).toFixed(2));
 }
